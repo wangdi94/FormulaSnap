@@ -12,6 +12,7 @@ pub struct HistoryEntry {
     pub mathml: Option<String>,
 }
 
+#[allow(dead_code)]
 pub fn insert(
     conn: &Connection,
     latex: &str,

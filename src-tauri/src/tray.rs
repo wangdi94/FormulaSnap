@@ -14,6 +14,7 @@ pub const MENU_ID_ABOUT: &str = "about";
 pub const MENU_ID_QUIT: &str = "quit";
 
 /// All menu item IDs for iteration / validation.
+#[allow(dead_code)]
 pub const ALL_MENU_IDS: &[&str] = &[
     MENU_ID_SCREENSHOT,
     MENU_ID_HISTORY,
