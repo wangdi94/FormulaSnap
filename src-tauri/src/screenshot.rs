@@ -10,7 +10,8 @@ pub fn capture_screen() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         .ok_or("No monitor found")?;
 
     let image = monitor.capture_image()?;
-    encode_png(&image)
+    let dynamic = DynamicImage::ImageRgba8(image);
+    encode_png(&dynamic)
 }
 
 /// Capture a specific rectangular region from the primary monitor.
