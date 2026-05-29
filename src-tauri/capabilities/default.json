@@ -5,11 +5,7 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "shell:allow-execute",
-    "shell:allow-spawn",
-    "shell:allow-stdin-write",
-    "shell:allow-stdout-read",
-    "shell:allow-stderr-read",
+    "shell:default",
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",
     "global-shortcut:allow-is-registered",
