@@ -70,7 +70,12 @@ jobs:
           mkdir -p src-tauri/binaries
           touch src-tauri/binaries/formulasnap-sidecar-x86_64-pc-windows-msvc.exe
       - name: Run tests
+        if: runner.os != 'Windows'
         run: cargo test --lib
+        working-directory: src-tauri
+      - name: Compile tests (Windows)
+        if: runner.os == 'Windows'
+        run: cargo test --lib --no-run
         working-directory: src-tauri
       - name: Clippy
         run: cargo clippy -- -D warnings
