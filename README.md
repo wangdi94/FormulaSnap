@@ -16,7 +16,7 @@
 
 ### 前置要求
 
-- Node.js 20+
+- Node.js 22+
 - pnpm
 - Python 3.10+
 - Rust 工具链

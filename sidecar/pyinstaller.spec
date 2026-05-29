@@ -51,6 +51,11 @@ a = Analysis(
         # --- PIL / Pillow (used by pix2text) ---
         "PIL",
         "PIL.Image",
+        # --- OCR engine SDKs ---
+        "anthropic",
+        "openai",
+        "google.genai",
+        "google.genai.types",
     ],
     hookspath=[],
     hooksconfig={},
@@ -78,7 +83,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,  # --console: show terminal for debugging
+    console=False,  # --console: show terminal for debugging
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

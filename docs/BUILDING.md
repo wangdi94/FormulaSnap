@@ -8,7 +8,7 @@
 
 | 工具 | 最低版本 | 用途 |
 |------|---------|------|
-| Node.js | 20+ | 前端构建 |
+| Node.js | 22+ | 前端构建 |
 | pnpm | 8+ | 包管理器 |
 | Rust | 1.70+ | Tauri 后端编译 |
 | Python | 3.10+ | Sidecar 打包 |
@@ -106,7 +106,7 @@ spec 文件定义了打包参数：
 ```bash
 # 1. 构建前端
 pnpm install
-pnpm build
+pnpm run build
 
 # 2. 构建 sidecar
 cd sidecar
@@ -147,7 +147,7 @@ $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "your-password"
 ```bash
 # 1. 构建前端
 pnpm install
-pnpm build
+pnpm run build
 
 # 2. 构建 sidecar
 cd sidecar
