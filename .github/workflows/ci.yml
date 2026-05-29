@@ -18,7 +18,7 @@ jobs:
           version: '11.4.0'
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
       - run: pnpm install
       - run: pnpm run test
@@ -34,6 +34,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      - run: pip install -e "./sidecar[dev,pix2text]"
+      - run: pip install -e "./sidecar[dev,pix2text,claude,openai,genai]"
         timeout-minutes: 15
       - run: pytest
