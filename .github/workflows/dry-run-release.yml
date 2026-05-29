@@ -1,15 +1,12 @@
-name: Release
+name: Dry-Run Release
 
 on:
-  push:
-    tags:
-      - 'v*'
-
-permissions:
-  contents: write
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
-  publish:
+  build:
     strategy:
       fail-fast: false
       matrix:
@@ -22,6 +19,7 @@ jobs:
             rust_target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -67,27 +65,7 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Build and release
+      - name: Build (dry-run)
         uses: tauri-apps/tauri-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'FormulaSnap ${{ github.ref_name }}'
-          releaseBody: |
-            ## FormulaSnap ${{ github.ref_name }}
-
-            ### Download
-
-            | Platform | Architecture | File |
-            |----------|-------------|------|
-            | macOS | Intel (x86_64) | `.dmg` |
-            | macOS | Apple Silicon (aarch64) | `.dmg` |
-            | Windows | x86_64 | `.msi` / `.exe` |
-
-            > Auto-update is enabled. Future releases will be delivered in-app.
-          releaseDraft: true
-          prerelease: false
           args: --target ${{ matrix.rust_target }}
