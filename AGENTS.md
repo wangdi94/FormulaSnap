@@ -5,8 +5,9 @@ Desktop OCR app: screenshot → LaTeX. Tauri v2 shell, React frontend, Python si
 
 ## Architecture (non-obvious)
 - **Frontend talks to Python sidecar directly via HTTP** — Rust layer does NOT proxy OCR calls. This is intentional but breaks the usual Tauri pattern.
-- **One SQLite database** via `rusqlite` in Rust (`db.rs`). `tauri-plugin-sql` is registered but has empty migrations — dead weight, don't use it.
+- **One SQLite database** via `rusqlite` in Rust (`db.rs`). `tauri-plugin-sql` was removed — `capabilities/default.json` still has `"sql:default"` (stale, remove it).
 - **Engine manager** in sidecar handles routing: circuit breaker, cost-aware fallback chain across Pix2Text/Mathpix/OpenAI/Claude/Gemini.
+- **`register_engine()` in server.py is orphaned** — never called in production. The FastAPI `/api/ocr` endpoint always returns 400. Engine logic goes through `EngineManager` instead. Tests mock `get_engine` to bypass.
 - **Settings split across 3 backends**: Rust DB (app settings), localStorage (theme/language), Python keyring (API keys). No single source of truth.
 
 ## OCR Pipeline
@@ -31,10 +32,12 @@ npx tsc --noEmit --skipLibCheck  # Type check
 
 ## Anti-patterns (known, don't repeat)
 - **No `as any`** — MathLive types are declared in `src/types/mathlive.d.ts`. Use `MathfieldElement` type, not `as any`.
-- **No new SQLite databases** — use existing `rusqlite` in `db.rs`. Don't add `tauri-plugin-sql` migrations.
+- **No new SQLite databases** — use existing `rusqlite` in `db.rs`.
 - **No FTS manual edits** — FTS syncs via triggers. Don't modify `history_fts` directly.
 - **No manual `pyinstaller.spec` edits** — use `sidecar/build.sh` or `build.bat` to rebuild sidecar binary.
 - **No Rust CI job** — GitHub Actions only runs frontend + backend Python. Add `cargo test`/`clippy` if adding Rust CI.
+- **No `unwrap()` in production Rust** — `tray.rs:44` and `sidecar.rs:86` have `.unwrap()` that will panic. Use `.map_err(|e| e.to_string())?`.
+- **`BACKEND_LABELS` duplicated in 4 files** — extract to `src/lib/constants.ts` before adding new backends.
 - Frontend bypasses Rust to call sidecar HTTP directly. If you need Rust-side logic for OCR calls, refactor the proxy path.
 
 ## Conventions
@@ -56,5 +59,8 @@ npx tsc --noEmit --skipLibCheck  # Type check
 - CI: `.github/workflows/ci.yml` — frontend (vitest) + backend (pytest) jobs, 3-platform matrix (ubuntu/windows/macos)
 - No Rust CI job, no lint/format checks. Add `cargo test`/`clippy` if adding Rust CI.
 - Release: `.github/workflows/release.yml` — PyInstaller sidecar + Tauri build on `v*` tags, macOS Intel+ARM+Windows
+- `release.yml` uses `tauri-apps/tauri-action@v0` — should be `@v2` for Tauri v2
+- `release.yml` uses `pnpm build` (no `run`) — this skips `prebuild` hook, breaking version sync. Use `pnpm run build`.
 - Tauri bundles: `bundle.targets: "all"`, sidecar via `externalBin` (built by `sidecar/build.sh`)
 - CSP disabled (`"csp": null`) — security concern
+- `pyinstaller.spec` has `console=True` — sidecar opens terminal window in production builds
