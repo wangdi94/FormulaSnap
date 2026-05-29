@@ -17,7 +17,6 @@
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-image",
     "clipboard-manager:allow-read-image",
-    "sql:default",
     "dialog:default",
     "updater:default"
   ]
