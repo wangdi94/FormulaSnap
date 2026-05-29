@@ -42,7 +42,14 @@ def _mock_anthropic_response(text: str = "$E = mc^2$", input_tokens: int = 500, 
 
 class TestClaudeEngine:
     def setup_method(self):
+        import sidecar.ocr_engines.claude_engine as mod
+        self._orig_avail = mod.ANTHROPIC_AVAILABLE
+        mod.ANTHROPIC_AVAILABLE = True
         self.engine = ClaudeEngine(api_key="sk-ant-test123456789")
+
+    def teardown_method(self):
+        import sidecar.ocr_engines.claude_engine as mod
+        mod.ANTHROPIC_AVAILABLE = self._orig_avail
 
     # -- recognize success --------------------------------------------------
 

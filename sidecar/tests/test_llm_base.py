@@ -8,7 +8,14 @@ from sidecar.ocr_engines.interface import OcrOptions, OcrResult, ApiKeyError
 
 class TestOpenAIEngine:
     def setup_method(self):
+        import sidecar.ocr_engines.openai_engine as mod
+        self._orig_avail = mod.OPENAI_AVAILABLE
+        mod.OPENAI_AVAILABLE = True
         self.engine = OpenAIEngine(api_key="sk-test123456789")
+
+    def teardown_method(self):
+        import sidecar.ocr_engines.openai_engine as mod
+        mod.OPENAI_AVAILABLE = self._orig_avail
 
     @patch('sidecar.ocr_engines.openai_engine.openai')
     def test_recognize_success(self, mock_openai):

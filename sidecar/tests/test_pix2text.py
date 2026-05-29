@@ -117,15 +117,24 @@ class TestPix2TextEngine:
         assert isinstance(result, ValidationResult)
         assert result.valid is False
 
-    @patch("sidecar.ocr_engines.pix2text_engine.PIX2TEXT_AVAILABLE", False)
     def test_validate_config_when_pix2text_not_installed(self):
         """Test that validate_config fails when pix2text is not installed."""
-        engine = Pix2TextEngine()
-        result = engine.validate_config()
+        import sidecar.ocr_engines.pix2text_engine as mod
+        orig_avail = mod.PIX2TEXT_AVAILABLE
+        orig_p2t = mod.Pix2Text
+        mod.PIX2TEXT_AVAILABLE = False
+        mod.Pix2Text = None
 
-        assert isinstance(result, ValidationResult)
-        assert result.valid is False
-        assert "not installed" in result.message.lower()
+        try:
+            engine = Pix2TextEngine()
+            result = engine.validate_config()
+
+            assert isinstance(result, ValidationResult)
+            assert result.valid is False
+            assert "not installed" in result.message.lower()
+        finally:
+            mod.PIX2TEXT_AVAILABLE = orig_avail
+            mod.Pix2Text = orig_p2t
 
     def test_get_rate_limit_status_returns_none(self):
         """Local engine has no rate limits."""

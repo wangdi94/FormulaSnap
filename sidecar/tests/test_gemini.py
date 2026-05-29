@@ -17,8 +17,18 @@ class TestGeminiEngine:
     """Tests for GeminiEngine OCR backend."""
 
     def setup_method(self):
+        import sidecar.ocr_engines.gemini_engine as mod
+        self._orig_avail = mod.GEMINI_AVAILABLE
+        self._orig_types = mod.types
+        mod.GEMINI_AVAILABLE = True
+        mod.types = MagicMock()
         from sidecar.ocr_engines.gemini_engine import GeminiEngine
         self.engine = GeminiEngine(api_key="AIzaSyFAKE_KEY_1234567890")
+
+    def teardown_method(self):
+        import sidecar.ocr_engines.gemini_engine as mod
+        mod.GEMINI_AVAILABLE = self._orig_avail
+        mod.types = self._orig_types
 
     # ------------------------------------------------------------------
     # Successful recognition
