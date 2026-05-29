@@ -1,14 +1,23 @@
 # FormulaSnap
 
-截图转 LaTeX 数学公式的桌面应用。Tauri v2 外壳，React 前端，Python sidecar 提供 5 种 OCR 引擎。
+[![CI](https://github.com/wangdi94/FormulaSnap/actions/workflows/ci.yml/badge.svg)](https://github.com/wangdi94/FormulaSnap/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Tauri v2](https://img.shields.io/badge/Tauri-v2-ffc131.svg)](https://tauri.app)
+[![React](https://img.shields.io/badge/React-18-61dafb.svg)](https://react.dev)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776ab.svg)](https://python.org)
+
+> Screenshot → LaTeX math formula. 截图转 LaTeX 数学公式的桌面应用。
+
+Tauri v2 外壳，React 前端，Python sidecar 提供 5 种 OCR 引擎。系统托盘常驻，快捷键一键截图识别数学公式。
 
 ## 功能
 
-- 截图 OCR → LaTeX 公式
-- 支持 5 种 OCR 引擎：Pix2Text / Mathpix / OpenAI / Claude / Gemini
-- 系统托盘常驻，快捷键 `Ctrl+Shift+C` 触发截图
-- 历史记录管理，支持全文搜索
-- 自动更新支持
+- 截图 OCR → LaTeX 公式（支持区域截图）
+- 5 种 OCR 引擎：Pix2Text / Mathpix / OpenAI / Claude / Gemini
+- 引擎管理器：熔断器 + 成本感知路由，自动选择最优引擎
+- 系统托盘常驻，快捷键 `Ctrl+Shift+C`（macOS: `Cmd+Shift+C`）触发截图
+- 历史记录管理，支持全文搜索（FTS5）
+- 自动更新支持（macOS / Windows）
 - 深色/浅色主题切换
 - 中英文界面
 
@@ -89,19 +98,48 @@ npx tsc --noEmit --skipLibCheck
 
 ```
 FormulaSnap/
-├── src/                    # React 前端
+├── src/                    # React 前端 (TypeScript)
 │   ├── pages/              # 4 个路由页面
 │   ├── components/         # 9 个 UI 组件
-│   ├── lib/                # 工具模块
-│   └── i18n/               # 国际化文件
-├── src-tauri/              # Rust 后端
-│   └── src/                # 9 个 Rust 模块
+│   ├── lib/                # 工具模块 (sidecarClient, settings, i18n...)
+│   └── i18n/               # zh.json, en.json
+├── src-tauri/              # Rust 后端 (Tauri v2)
+│   └── src/                # 9 个模块 (db, screenshot, hotkey, tray, sidecar...)
 ├── sidecar/                # Python OCR 服务
-│   └── sidecar/            # FastAPI 服务 + OCR 引擎
-└── .github/workflows/      # CI/CD
+│   └── sidecar/            # FastAPI 服务 + 5 个 OCR 引擎实现
+└── .github/workflows/      # CI (测试) + Release (打包发布)
 ```
 
+## 技术栈
+
+| 层 | 技术 |
+|---|------|
+| 桌面外壳 | [Tauri v2](https://tauri.app) (Rust) |
+| 前端 | React 18 + TypeScript + Tailwind CSS |
+| OCR 服务 | Python 3.10+ / FastAPI |
+| 数据库 | SQLite (rusqlite, bundled) |
+| OCR 引擎 | Pix2Text / Mathpix / OpenAI GPT-4o / Claude Sonnet / Gemini 2.5 Pro |
+
 ## 架构
+
+```
+┌─────────────────────────────────────────────┐
+│                  Tauri v2                    │
+│  ┌──────────┐  ┌──────────┐  ┌───────────┐  │
+│  │ React UI │──│ Rust 后端 │──│ SQLite DB │  │
+│  └────┬─────┘  └──────────┘  └───────────┘  │
+│       │ HTTP (port 8477)                     │
+│  ┌────▼─────────────────────────────────┐   │
+│  │        Python Sidecar (FastAPI)       │   │
+│  │  ┌─────────┐ ┌────────┐ ┌─────────┐  │   │
+│  │  │Pix2Text │ │Mathpix │ │ OpenAI  │  │   │
+│  │  └─────────┘ └────────┘ └─────────┘  │   │
+│  │  ┌─────────┐ ┌────────┐              │   │
+│  │  │ Claude  │ │ Gemini │              │   │
+│  │  └─────────┘ └────────┘              │   │
+│  └──────────────────────────────────────┘   │
+└─────────────────────────────────────────────┘
+```
 
 - **前端 → Sidecar 直连**：React 通过 HTTP 直接调用 Python sidecar（端口 8477），不经过 Rust 层
 - **引擎管理器**：熔断器 + 成本感知路由，自动选择最优 OCR 引擎
