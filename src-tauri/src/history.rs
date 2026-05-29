@@ -79,6 +79,8 @@ pub fn delete(conn: &Connection, id: i64) -> Result<bool, rusqlite::Error> {
 }
 
 pub fn search(conn: &Connection, query: &str) -> Result<Vec<HistoryEntry>, rusqlite::Error> {
+    // Escape FTS5 special characters by wrapping in double quotes for phrase search
+    let escaped_query = format!("\"{}\"", query.replace('"', "\"\""));
     let mut stmt = conn.prepare(
         "SELECT h.id, h.created_at, h.latex, h.backend, h.confidence, h.screenshot_path, h.mathml
          FROM history h
@@ -87,7 +89,7 @@ pub fn search(conn: &Connection, query: &str) -> Result<Vec<HistoryEntry>, rusql
          ORDER BY h.created_at DESC",
     )?;
     let entries = stmt
-        .query_map([query], |row| {
+        .query_map([&escaped_query as &str], |row| {
             Ok(HistoryEntry {
                 id: row.get(0)?,
                 created_at: row.get(1)?,
