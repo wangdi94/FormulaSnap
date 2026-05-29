@@ -57,16 +57,18 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-      - name: Create dummy sidecar binary
+      - name: Create dummy sidecar binary (Unix)
+        if: runner.os != 'Windows'
         run: |
           mkdir -p src-tauri/binaries
-          if [ "$RUNNER_OS" == "macOS" ]; then
-            touch src-tauri/binaries/formulasnap-sidecar-aarch64-apple-darwin
-          elif [ "$RUNNER_OS" == "Linux" ]; then
-            touch src-tauri/binaries/formulasnap-sidecar-x86_64-unknown-linux-gnu
-          elif [ "$RUNNER_OS" == "Windows" ]; then
-            touch src-tauri/binaries/formulasnap-sidecar-x86_64-pc-windows-msvc.exe
-          fi
+          touch src-tauri/binaries/formulasnap-sidecar-aarch64-apple-darwin
+          touch src-tauri/binaries/formulasnap-sidecar-x86_64-unknown-linux-gnu
+          touch src-tauri/binaries/formulasnap-sidecar-x86_64-apple-darwin
+      - name: Create dummy sidecar binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p src-tauri/binaries
+          touch src-tauri/binaries/formulasnap-sidecar-x86_64-pc-windows-msvc.exe
       - name: Run tests
         run: cargo test --lib
         working-directory: src-tauri
