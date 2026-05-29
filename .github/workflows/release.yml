@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-13 # Intel (x86_64)
+            rust_target: x86_64-apple-darwin
+          - os: macos-latest # Apple Silicon (aarch64)
+            rust_target: aarch64-apple-darwin
+          - os: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- Python sidecar (PyInstaller) ----
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install sidecar dependencies
+        run: pip install "./sidecar" pyinstaller
+
+      - name: Build sidecar (Unix)
+        if: runner.os != 'Windows'
+        working-directory: sidecar
+        run: ./build.sh
+
+      - name: Build sidecar (Windows)
+        if: runner.os == 'Windows'
+        working-directory: sidecar
+        shell: cmd
+        run: .\build.bat
+
+      # ---- Frontend ----
+      - uses: pnpm/action-setup@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install
+      - run: pnpm build
+
+      # ---- Rust / Tauri ----
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'FormulaSnap ${{ github.ref_name }}'
+          releaseBody: |
+            ## FormulaSnap ${{ github.ref_name }}
+
+            ### Download
+
+            | Platform | Architecture | File |
+            |----------|-------------|------|
+            | macOS | Intel (x86_64) | `.dmg` |
+            | macOS | Apple Silicon (aarch64) | `.dmg` |
+            | Windows | x86_64 | `.msi` / `.exe` |
+
+            > Auto-update is enabled. Future releases will be delivered in-app.
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.rust_target }}

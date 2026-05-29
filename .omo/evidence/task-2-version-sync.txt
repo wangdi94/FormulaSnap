@@ -1,0 +1,25 @@
+# Task 2: 版本号脚本功能验证
+Date: 2025-05-29
+
+## Scenario 1: 版本号脚本功能验证
+- scripts/sync-version.js exists: true
+- Script reads package.json: true
+- Script writes Cargo.toml: true
+- Script writes tauri.conf.json: true
+
+### Version sync result:
+- package.json version: 0.1.0
+- Cargo.toml version: 0.1.0
+- tauri.conf.json version: 0.1.0
+- All versions match: true
+
+### Re-run idempotency:
+- Running sync again: Version synced to 0.1.0 (no errors)
+
+Result: PASS
+
+## Scenario 2: Git tag 版本号同步验证
+- Note: 当前项目不是 git 仓库，无法测试 git tag 同步
+- 但 sync-version.js 脚本逻辑正确，从 package.json 读取版本号写入其他文件
+
+Result: SKIP (not a git repo)

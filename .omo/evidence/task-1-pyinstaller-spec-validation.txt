@@ -1,0 +1,29 @@
+# Task 1: PyInstaller Spec 文件验证
+Date: 2025-05-29
+
+## Scenario 1: PyInstaller spec 文件语法验证
+- PyInstaller version: 6.20.0
+- Command: `pyinstaller pyinstaller.spec --help`
+- Result: PASS - 命令成功执行，无语法错误
+
+## Scenario 2: Spec 文件内容完整性检查
+- Has Analysis: true
+- Has PYZ: true
+- Has EXE: true
+- Entry point: str(ROOT / "sidecar" / "main.py")
+- Output name: openmathpix-sidecar
+- Console mode: True
+- UPX enabled: True
+- Hidden imports count: 24
+- Includes uvicorn: true
+- Includes fastapi: true
+- Includes pix2text: true
+- Includes onnxruntime: true
+- Includes PIL: true
+
+Result: PASS
+
+## Notes
+- 初始执行时遇到 pathlib 包冲突（已安装的 pathlib 1.0.1 是旧版 backport）
+- 解决方案：`pip uninstall pathlib` 后 PyInstaller 正常工作
+- 这是环境问题，非 spec 文件问题

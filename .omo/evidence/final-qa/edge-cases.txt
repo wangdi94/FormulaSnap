@@ -1,0 +1,43 @@
+# Edge Case Tests
+Date: 2025-05-29
+
+## Edge Case 1: Empty State - Version Sync Idempotency
+- Running sync-version.js twice with same version: PASS
+- No errors on re-run
+- Versions remain consistent
+
+Result: PASS
+
+## Edge Case 2: Invalid JSON Detection
+- Created file with '{ invalid json'
+- python -m json.tool correctly rejected it
+- Error detection works properly
+
+Result: PASS
+
+## Edge Case 3: Spec File Hidden Imports Not Empty
+- Hidden imports count: 24
+- All critical imports present (uvicorn, fastapi, pix2text, onnxruntime, PIL)
+
+Result: PASS
+
+## Edge Case 4: No Sensitive Data in Configs
+- Searched tauri.conf.json for: password, secret, api_key, apikey, token
+- No matches found (pubkey is public key, not sensitive)
+
+Result: PASS
+
+## Edge Case 5: Build Scripts Reference Output Dir
+- build.sh OUTPUT_DIR references: 9 occurrences
+- build.bat OUTPUT_DIR references: 7 occurrences
+- Both scripts consistently reference the output directory
+
+Result: PASS
+
+## Edge Case 6: pathlib Package Conflict
+- PyInstaller initially failed due to pathlib 1.0.1 backport package
+- Resolution: pip uninstall pathlib
+- This is an environment issue, not a code issue
+- Documented in task-1 evidence
+
+Result: PASS (resolved)

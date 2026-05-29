@@ -1,0 +1,32 @@
+# Task 8: 权限配置验证
+Date: 2025-05-29
+
+## Scenario 1: 权限配置验证
+- Has updater:default: true
+- Has core:default: true
+- Total permissions: 16
+
+Permissions list:
+1. core:default
+2. shell:allow-execute
+3. shell:allow-spawn
+4. shell:allow-stdin-write
+5. shell:allow-stdout-read
+6. shell:allow-stderr-read
+7. global-shortcut:allow-register
+8. global-shortcut:allow-unregister
+9. global-shortcut:allow-is-registered
+10. clipboard-manager:allow-write-text
+11. clipboard-manager:allow-read-text
+12. clipboard-manager:allow-write-image
+13. clipboard-manager:allow-read-image
+14. sql:default
+15. dialog:default
+16. updater:default
+
+Result: PASS
+
+## Scenario 2: JSON 语法验证
+- python -m json.tool: JSON VALID
+
+Result: PASS

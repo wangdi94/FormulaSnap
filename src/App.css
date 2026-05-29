@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+/* Dark mode: class 策略 → 通过 .dark 类切换 */
+@custom-variant dark (&:is(.dark *));
+
+@layer base {
+  html {
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+  }
+}

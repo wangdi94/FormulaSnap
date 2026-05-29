@@ -1,0 +1,465 @@
+{
+  "schema_version": 2,
+  "active_work_id": "windows-macos-packaging",
+  "updated_at": "2026-05-29T07:04:31.186Z",
+  "works": {
+    "fix-plan-legacy": {
+      "work_id": "fix-plan-legacy",
+      "active_plan": "/home/wangdi/OpenMathpix/.omo/plans/fix-plan.md",
+      "plan_name": "fix-plan",
+      "status": "completed",
+      "started_at": "2026-05-29T03:10:37.552Z",
+      "updated_at": "2026-05-29T05:11:31.588Z",
+      "ended_at": "2026-05-29T03:36:07.653Z",
+      "session_ids": [
+        "ses_18e49a22cffeACCMiAwJu5j7qf",
+        "ses_18ddb1845ffe5j4I5W7xFTYEBe",
+        "ses_18ddb1000ffe9JeQ8RnUNjya2e",
+        "ses_18ddb031dffert97u4b45hl0NK",
+        "ses_18ddafa37ffe9VwGS4vNnevkVi",
+        "ses_18ddaf682ffeXrNaoWaen7OfSw",
+        "ses_18ddaf277ffeC3HnWMXJGREYJ2"
+      ],
+      "session_origins": {
+        "ses_18e49a22cffeACCMiAwJu5j7qf": "direct",
+        "ses_18ddb1845ffe5j4I5W7xFTYEBe": "appended",
+        "ses_18ddb1000ffe9JeQ8RnUNjya2e": "appended",
+        "ses_18ddb031dffert97u4b45hl0NK": "appended",
+        "ses_18ddafa37ffe9VwGS4vNnevkVi": "appended",
+        "ses_18ddaf682ffeXrNaoWaen7OfSw": "appended",
+        "ses_18ddaf277ffeC3HnWMXJGREYJ2": "appended"
+      },
+      "task_sessions": {
+        "todo:1": {
+          "task_key": "todo:1",
+          "task_label": "1",
+          "task_title": "lib.rs: 删除 greet() 命令和 tauri-plugin-sql 空壳注册",
+          "session_id": "ses_18e4807caffeS986HEh2gEAz11",
+          "status": "completed",
+          "elapsed_ms": 73821
+        },
+        "todo:2": {
+          "task_key": "todo:2",
+          "task_label": "2",
+          "task_title": "pyinstaller.spec: 删除占位文件",
+          "session_id": "ses_18e47d4d3ffeyh82eBRZZ3VE1T",
+          "status": "completed",
+          "elapsed_ms": 13000
+        },
+        "todo:3": {
+          "task_key": "todo:3",
+          "task_label": "3",
+          "task_title": "key_manager.py: 异常吞没改为日志记录",
+          "session_id": "ses_18e478de9ffekjD1CaNKp2usdP",
+          "status": "completed",
+          "elapsed_ms": 26000
+        },
+        "todo:4": {
+          "task_key": "todo:4",
+          "task_label": "4",
+          "task_title": "扩展 MathLive 类型声明文件",
+          "session_id": "ses_18e474e00ffe4EgPQGL9w5aUNA",
+          "status": "completed",
+          "elapsed_ms": 34000
+        },
+        "todo:5": {
+          "task_key": "todo:5",
+          "task_label": "5",
+          "task_title": "stats.ts: 删除重复实现 + SettingsPage 迁移到 sidecarClient",
+          "session_id": "ses_18e456b88ffeosgAyvmMhikkeQ",
+          "status": "completed",
+          "elapsed_ms": 272630
+        },
+        "todo:6": {
+          "task_key": "todo:6",
+          "task_label": "6",
+          "task_title": "clipboard.ts: 消除 2 处 as any",
+          "session_id": "ses_18e4538f5ffeCZkz4Mr5udxoD6",
+          "status": "completed",
+          "elapsed_ms": 40000
+        },
+        "todo:7": {
+          "task_key": "todo:7",
+          "task_label": "7",
+          "task_title": "FormulaPreview.tsx: 消除 2 处 as any",
+          "session_id": "ses_18e44fbfdffeM26F83DRn2Z7dW",
+          "status": "completed",
+          "elapsed_ms": 50000
+        },
+        "todo:8": {
+          "task_key": "todo:8",
+          "task_label": "8",
+          "task_title": "tray.rs: 实现 3 个菜单项功能",
+          "session_id": "ses_18e44b980ffeQZ1eYwHhAw6M3A",
+          "status": "completed",
+          "elapsed_ms": 313000
+        },
+        "todo:9": {
+          "task_key": "todo:9",
+          "task_label": "9",
+          "task_title": "App.tsx: 添加全局导航事件监听",
+          "session_id": "ses_18e4485a4ffe63ojNb1P8vpdiK",
+          "status": "completed",
+          "elapsed_ms": 34000
+        },
+        "todo:10": {
+          "task_key": "todo:10",
+          "task_label": "10",
+          "task_title": "clipboard.test.ts: 编写 clipboard 工具函数测试",
+          "session_id": "ses_18e3edadaffeocRhnKAOzrsaHS",
+          "status": "completed",
+          "elapsed_ms": 178794
+        },
+        "todo:11": {
+          "task_key": "todo:11",
+          "task_label": "11",
+          "task_title": "sidecarClient stats 测试",
+          "session_id": "ses_18e3eb962ffe10zeyMWO4cbJxC",
+          "status": "completed",
+          "elapsed_ms": 179000
+        },
+        "todo:12": {
+          "task_key": "todo:12",
+          "task_label": "12",
+          "task_title": "tray.rs 内联测试",
+          "session_id": "ses_18e3e922affec2jDypLtxn859v",
+          "status": "completed",
+          "elapsed_ms": 291000
+        },
+        "todo:13": {
+          "task_key": "todo:13",
+          "task_label": "13",
+          "task_title": "hotkey.rs 内联测试",
+          "session_id": "ses_18e3e6c8cffeBWq8Qg3R3H52WK",
+          "status": "completed",
+          "elapsed_ms": 202000
+        },
+        "final-wave:f1": {
+          "task_key": "final-wave:f1",
+          "task_label": "F1",
+          "task_title": "计划合规审计",
+          "session_id": "ses_18e388050ffeO2ZGw9FC7N46N5",
+          "status": "completed",
+          "elapsed_ms": 109632
+        },
+        "final-wave:f2": {
+          "task_key": "final-wave:f2",
+          "task_label": "F2",
+          "task_title": "代码质量审查",
+          "session_id": "ses_18e3857a0ffeccB06mxxYU5Y25",
+          "status": "completed",
+          "elapsed_ms": 163000
+        },
+        "final-wave:f3": {
+          "task_key": "final-wave:f3",
+          "task_label": "F3",
+          "task_title": "手工 QA 执行",
+          "session_id": "ses_18e3827d7ffeQo4rEJX5sGbXrx",
+          "status": "completed",
+          "elapsed_ms": 89000
+        },
+        "final-wave:f4": {
+          "task_key": "final-wave:f4",
+          "task_label": "F4",
+          "task_title": "范围保真检查",
+          "session_id": "ses_18e37fedeffeggDSPuygXbrUPP",
+          "status": "completed",
+          "elapsed_ms": 110000
+        }
+      },
+      "elapsed_ms": 1530101
+    },
+    "windows-macos-packaging": {
+      "work_id": "windows-macos-packaging",
+      "active_plan": "/home/wangdi/OpenMathpix/.omo/plans/windows-macos-packaging.md",
+      "plan_name": "windows-macos-packaging",
+      "status": "completed",
+      "started_at": "2026-05-29T06:14:46.296Z",
+      "updated_at": "2026-05-29T07:04:31.186Z",
+      "ended_at": "2026-05-29T06:52:00.000Z",
+      "session_ids": [
+        "ses_18da10b10ffepoB8644WY9xVMK",
+        "ses_18d74c0b4ffeXURBQA57VTPHLX",
+        "ses_18d74b682ffer4xsk7EaPBWyMj",
+        "ses_18d74addcffeQwhBv8Uj1zIAmc",
+        "ses_18d74a486ffelw6Z5VJ0qkOfH1",
+        "ses_18d749da3ffehdmJbHzHXjg2eS",
+        "ses_18d749581ffeu0kiv0fmnzsPRr",
+        "ses_18d7390aeffebYPLgRZH9spNBf",
+        "ses_18d738731ffeC01y33tynzJI30",
+        "ses_18d737f9fffeQDnMQhVcfjTrGH"
+      ],
+      "session_origins": {
+        "ses_18da10b10ffepoB8644WY9xVMK": "direct",
+        "ses_18d74c0b4ffeXURBQA57VTPHLX": "appended",
+        "ses_18d74b682ffer4xsk7EaPBWyMj": "appended",
+        "ses_18d74addcffeQwhBv8Uj1zIAmc": "appended",
+        "ses_18d74a486ffelw6Z5VJ0qkOfH1": "appended",
+        "ses_18d749da3ffehdmJbHzHXjg2eS": "appended",
+        "ses_18d749581ffeu0kiv0fmnzsPRr": "appended",
+        "ses_18d7390aeffebYPLgRZH9spNBf": "appended",
+        "ses_18d738731ffeC01y33tynzJI30": "appended",
+        "ses_18d737f9fffeQDnMQhVcfjTrGH": "appended"
+      },
+      "task_sessions": {
+        "todo:1": {
+          "task_key": "todo:1",
+          "task_label": "1",
+          "task_title": "创建 PyInstaller 配置文件",
+          "session_id": "ses_18d9e56f1ffeCJptV49Xgsb5Ca",
+          "status": "completed",
+          "elapsed_ms": 131000
+        },
+        "todo:2": {
+          "task_key": "todo:2",
+          "task_label": "2",
+          "task_title": "更新 package.json 添加版本号管理脚本",
+          "session_id": "ses_18d9e10c3ffe8W52DBCxLI9qKC",
+          "status": "completed",
+          "elapsed_ms": 109000
+        },
+        "todo:3": {
+          "task_key": "todo:3",
+          "task_label": "3",
+          "task_title": "配置 Tauri updater 插件依赖",
+          "session_id": "ses_18d9dd128ffe7PgeDrP1kCZrZl",
+          "status": "completed",
+          "elapsed_ms": 340000
+        },
+        "todo:4": {
+          "task_key": "todo:4",
+          "task_label": "4",
+          "task_title": "生成 Tauri 签名密钥对",
+          "session_id": "ses_18d9d9181ffe63kdoNEjWFKkKL",
+          "status": "completed",
+          "elapsed_ms": 75000
+        },
+        "todo:5": {
+          "task_key": "todo:5",
+          "task_label": "5",
+          "task_title": "创建 PyInstaller 构建脚本",
+          "session_id": "ses_18d96ba23ffeOopXfVo9fEgC7e",
+          "status": "completed",
+          "elapsed_ms": 109000
+        },
+        "todo:6": {
+          "task_key": "todo:6",
+          "task_label": "6",
+          "task_title": "更新 tauri.conf.json 打包配置",
+          "session_id": "ses_18d968167ffe2LvNKOSj1Ebkm2",
+          "status": "completed",
+          "elapsed_ms": 29000
+        },
+        "todo:7": {
+          "task_key": "todo:7",
+          "task_label": "7",
+          "task_title": "集成 updater 到前端代码",
+          "session_id": "ses_18d965230ffel8Mkz886RT4sGi",
+          "status": "completed",
+          "elapsed_ms": 139000
+        },
+        "todo:8": {
+          "task_key": "todo:8",
+          "task_label": "8",
+          "task_title": "更新 Tauri 权限配置",
+          "session_id": "ses_18d962491ffe4CK8TyDL4HUIEJ",
+          "status": "completed",
+          "elapsed_ms": 22000
+        },
+        "todo:9": {
+          "task_key": "todo:9",
+          "task_label": "9",
+          "task_title": "创建 GitHub Actions release 工作流",
+          "session_id": "ses_18d92f56cffezC3XUjwB977DxR",
+          "status": "completed",
+          "elapsed_ms": 275000
+        },
+        "todo:10": {
+          "task_key": "todo:10",
+          "task_label": "10",
+          "task_title": "创建打包文档",
+          "session_id": "ses_18d92c410ffeEN86APGh6GMQkh",
+          "status": "completed",
+          "elapsed_ms": 165000
+        },
+        "final-wave:f1": {
+          "task_key": "final-wave:f1",
+          "task_label": "F1",
+          "task_title": "计划合规审计",
+          "session_id": "ses_18d85ba7fffec7tMNQTIYLF4ul",
+          "status": "completed",
+          "elapsed_ms": 161000
+        },
+        "final-wave:f2": {
+          "task_key": "final-wave:f2",
+          "task_label": "F2",
+          "task_title": "代码质量审查",
+          "session_id": "ses_18d8d7a69ffeR70kuoMYv5tYcg",
+          "status": "completed",
+          "elapsed_ms": 103000
+        },
+        "final-wave:f3": {
+          "task_key": "final-wave:f3",
+          "task_label": "F3",
+          "task_title": "手工 QA 执行",
+          "session_id": "ses_18d8d3ffcffeUo8KuNg2b66BcL",
+          "status": "completed",
+          "elapsed_ms": 438000
+        },
+        "final-wave:f4": {
+          "task_key": "final-wave:f4",
+          "task_label": "F4",
+          "task_title": "范围保真检查",
+          "session_id": "ses_18d8d0281ffeVpgkQhLHSl5oCV",
+          "status": "completed",
+          "elapsed_ms": 216000
+        }
+      },
+      "elapsed_ms": 2232000
+    }
+  },
+  "session_ids": [
+    "ses_18da10b10ffepoB8644WY9xVMK",
+    "ses_18d74c0b4ffeXURBQA57VTPHLX",
+    "ses_18d74b682ffer4xsk7EaPBWyMj",
+    "ses_18d74addcffeQwhBv8Uj1zIAmc",
+    "ses_18d74a486ffelw6Z5VJ0qkOfH1",
+    "ses_18d749da3ffehdmJbHzHXjg2eS",
+    "ses_18d749581ffeu0kiv0fmnzsPRr",
+    "ses_18d7390aeffebYPLgRZH9spNBf",
+    "ses_18d738731ffeC01y33tynzJI30",
+    "ses_18d737f9fffeQDnMQhVcfjTrGH"
+  ],
+  "session_origins": {
+    "ses_18da10b10ffepoB8644WY9xVMK": "direct",
+    "ses_18d74c0b4ffeXURBQA57VTPHLX": "appended",
+    "ses_18d74b682ffer4xsk7EaPBWyMj": "appended",
+    "ses_18d74addcffeQwhBv8Uj1zIAmc": "appended",
+    "ses_18d74a486ffelw6Z5VJ0qkOfH1": "appended",
+    "ses_18d749da3ffehdmJbHzHXjg2eS": "appended",
+    "ses_18d749581ffeu0kiv0fmnzsPRr": "appended",
+    "ses_18d7390aeffebYPLgRZH9spNBf": "appended",
+    "ses_18d738731ffeC01y33tynzJI30": "appended",
+    "ses_18d737f9fffeQDnMQhVcfjTrGH": "appended"
+  },
+  "task_sessions": {
+    "todo:1": {
+      "task_key": "todo:1",
+      "task_label": "1",
+      "task_title": "创建 PyInstaller 配置文件",
+      "session_id": "ses_18d9e56f1ffeCJptV49Xgsb5Ca",
+      "status": "completed",
+      "elapsed_ms": 131000
+    },
+    "todo:2": {
+      "task_key": "todo:2",
+      "task_label": "2",
+      "task_title": "更新 package.json 添加版本号管理脚本",
+      "session_id": "ses_18d9e10c3ffe8W52DBCxLI9qKC",
+      "status": "completed",
+      "elapsed_ms": 109000
+    },
+    "todo:3": {
+      "task_key": "todo:3",
+      "task_label": "3",
+      "task_title": "配置 Tauri updater 插件依赖",
+      "session_id": "ses_18d9dd128ffe7PgeDrP1kCZrZl",
+      "status": "completed",
+      "elapsed_ms": 340000
+    },
+    "todo:4": {
+      "task_key": "todo:4",
+      "task_label": "4",
+      "task_title": "生成 Tauri 签名密钥对",
+      "session_id": "ses_18d9d9181ffe63kdoNEjWFKkKL",
+      "status": "completed",
+      "elapsed_ms": 75000
+    },
+    "todo:5": {
+      "task_key": "todo:5",
+      "task_label": "5",
+      "task_title": "创建 PyInstaller 构建脚本",
+      "session_id": "ses_18d96ba23ffeOopXfVo9fEgC7e",
+      "status": "completed",
+      "elapsed_ms": 109000
+    },
+    "todo:6": {
+      "task_key": "todo:6",
+      "task_label": "6",
+      "task_title": "更新 tauri.conf.json 打包配置",
+      "session_id": "ses_18d968167ffe2LvNKOSj1Ebkm2",
+      "status": "completed",
+      "elapsed_ms": 29000
+    },
+    "todo:7": {
+      "task_key": "todo:7",
+      "task_label": "7",
+      "task_title": "集成 updater 到前端代码",
+      "session_id": "ses_18d965230ffel8Mkz886RT4sGi",
+      "status": "completed",
+      "elapsed_ms": 139000
+    },
+    "todo:8": {
+      "task_key": "todo:8",
+      "task_label": "8",
+      "task_title": "更新 Tauri 权限配置",
+      "session_id": "ses_18d962491ffe4CK8TyDL4HUIEJ",
+      "status": "completed",
+      "elapsed_ms": 22000
+    },
+    "todo:9": {
+      "task_key": "todo:9",
+      "task_label": "9",
+      "task_title": "创建 GitHub Actions release 工作流",
+      "session_id": "ses_18d92f56cffezC3XUjwB977DxR",
+      "status": "completed",
+      "elapsed_ms": 275000
+    },
+    "todo:10": {
+      "task_key": "todo:10",
+      "task_label": "10",
+      "task_title": "创建打包文档",
+      "session_id": "ses_18d92c410ffeEN86APGh6GMQkh",
+      "status": "completed",
+      "elapsed_ms": 165000
+    },
+    "final-wave:f1": {
+      "task_key": "final-wave:f1",
+      "task_label": "F1",
+      "task_title": "计划合规审计",
+      "session_id": "ses_18d85ba7fffec7tMNQTIYLF4ul",
+      "status": "completed",
+      "elapsed_ms": 161000
+    },
+    "final-wave:f2": {
+      "task_key": "final-wave:f2",
+      "task_label": "F2",
+      "task_title": "代码质量审查",
+      "session_id": "ses_18d8d7a69ffeR70kuoMYv5tYcg",
+      "status": "completed",
+      "elapsed_ms": 103000
+    },
+    "final-wave:f3": {
+      "task_key": "final-wave:f3",
+      "task_label": "F3",
+      "task_title": "手工 QA 执行",
+      "session_id": "ses_18d8d3ffcffeUo8KuNg2b66BcL",
+      "status": "completed",
+      "elapsed_ms": 438000
+    },
+    "final-wave:f4": {
+      "task_key": "final-wave:f4",
+      "task_label": "F4",
+      "task_title": "范围保真检查",
+      "session_id": "ses_18d8d0281ffeVpgkQhLHSl5oCV",
+      "status": "completed",
+      "elapsed_ms": 216000
+    }
+  },
+  "active_plan": "/home/wangdi/OpenMathpix/.omo/plans/windows-macos-packaging.md",
+  "plan_name": "windows-macos-packaging",
+  "status": "completed",
+  "started_at": "2026-05-29T06:14:46.296Z",
+  "ended_at": "2026-05-29T06:52:00.000Z",
+  "elapsed_ms": 2232000
+}
