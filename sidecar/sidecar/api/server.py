@@ -1,14 +1,18 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 import base64
+import logging
+import time
 
 from sidecar.ocr_engines.interface import (
     OcrBackend, OcrOptions, OcrError,
     ApiKeyError, RateLimitError, NetworkError,
 )
 from sidecar.ocr_engines.cost_tracker import cost_tracker, RateLimitExceeded
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="FormulaSnap Sidecar")
 
