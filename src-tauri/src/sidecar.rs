@@ -39,11 +39,11 @@ pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
 
         match poll_health(&url, HEALTH_TIMEOUT, HEALTH_INTERVAL) {
             Ok(()) => {
-                println!("[sidecar] Python sidecar 已就绪 (port {})", SIDECAR_PORT);
+                log::info!("Python sidecar 已就绪 (port {})", SIDECAR_PORT);
                 let _ = app_handle.emit("sidecar://ready", ());
             }
             Err(e) => {
-                eprintln!("[sidecar] 健康检查失败: {}", e);
+                log::error!("健康检查失败: {}", e);
                 let _ = app_handle.emit("sidecar://error", e);
             }
         }
@@ -86,12 +86,12 @@ pub fn stop_sidecar(app: &AppHandle) {
     let mut guard = state.0.lock().unwrap();
 
     if let Some(child) = guard.take() {
-        println!("[sidecar] 正在关闭 Python sidecar...");
+        log::info!("正在关闭 Python sidecar...");
         // CommandChild::kill() 发送 SIGKILL（Unix）或 TerminateProcess（Windows）
         if let Err(e) = child.kill() {
-            eprintln!("[sidecar] 关闭 sidecar 失败: {}", e);
+            log::error!("关闭 sidecar 失败: {}", e);
         } else {
-            println!("[sidecar] Python sidecar 已关闭");
+            log::info!("Python sidecar 已关闭");
         }
     }
 }

@@ -25,7 +25,7 @@ pub fn register_hotkeys(app: &AppHandle) -> Result<(), Box<dyn std::error::Error
                             let _ = handle.emit(CAPTURE_EVENT_NAME, b64);
                         }
                         Err(e) => {
-                            eprintln!("Screenshot capture failed: {e}");
+                            log::error!("Screenshot capture failed: {e}");
                         }
                     }
                 });

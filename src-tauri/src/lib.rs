@@ -1,6 +1,7 @@
 mod db;
 mod history;
 mod hotkey;
+mod logger;
 pub mod permissions;
 mod screenshot;
 mod sidecar;
@@ -121,6 +122,11 @@ pub fn run() {
                 .app_data_dir()
                 .expect("failed to get app data dir");
             std::fs::create_dir_all(&app_dir).expect("failed to create app data dir");
+
+            if let Err(e) = logger::init_logger(&app_dir) {
+                eprintln!("Failed to initialize logger: {}", e);
+            }
+
             let db_path = app_dir.join("app.db");
 
             let conn = rusqlite::Connection::open(&db_path).expect("failed to open database");
@@ -131,15 +137,15 @@ pub fn run() {
             permissions::check_and_guide(app.handle());
 
             if let Err(e) = hotkey::register_hotkeys(app.handle()) {
-                eprintln!("Failed to register hotkeys: {}", e);
+                log::error!("Failed to register hotkeys: {}", e);
             }
 
             if let Err(e) = tray::create_tray(app.handle()) {
-                eprintln!("Failed to create tray: {}", e);
+                log::error!("Failed to create tray: {}", e);
             }
 
             if let Err(e) = sidecar::start_sidecar(app.handle()) {
-                eprintln!("Failed to start sidecar: {}", e);
+                log::error!("Failed to start sidecar: {}", e);
             }
 
             Ok(())

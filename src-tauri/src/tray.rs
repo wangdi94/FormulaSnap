@@ -60,7 +60,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                         let _ = app.emit("capture-requested", b64);
                     }
                     Err(e) => {
-                        eprintln!("Tray screenshot capture failed: {e}");
+                        log::error!("Tray screenshot capture failed: {e}");
                     }
                 }
             }
