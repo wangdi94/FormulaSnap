@@ -8,6 +8,7 @@ mod sidecar;
 mod tray;
 
 use std::sync::Mutex;
+use tauri::window::WindowEvent;
 use tauri::Manager;
 
 pub struct DbConn(pub Mutex<rusqlite::Connection>);
@@ -146,6 +147,16 @@ pub fn run() {
 
             if let Err(e) = sidecar::start_sidecar(app.handle()) {
                 log::error!("Failed to start sidecar: {}", e);
+            }
+
+            // 窗口关闭时最小化到系统托盘，而非退出应用
+            if let Some(main_window) = app.get_webview_window("main") {
+                main_window.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = main_window.hide();
+                    }
+                });
             }
 
             Ok(())
