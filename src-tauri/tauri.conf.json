@@ -41,7 +41,7 @@
     "externalBin": [
       "binaries/formulasnap-sidecar"
     ],
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": false
   },
   "plugins": {
     "updater": {

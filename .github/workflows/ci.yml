@@ -93,3 +93,65 @@ jobs:
             -v "${{ github.workspace }}:${{ github.workspace }}" \
             -w "${{ github.workspace }}" \
             rhysd/actionlint:latest -color
+
+  build-verification:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            rust_target: x86_64-apple-darwin
+          - os: macos-latest
+            rust_target: aarch64-apple-darwin
+          - os: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- Python sidecar (PyInstaller) ----
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install sidecar dependencies
+        run: pip install "./sidecar[pix2text,claude,openai,genai]" pyinstaller
+
+      - name: Build sidecar (Unix)
+        if: runner.os != 'Windows'
+        working-directory: sidecar
+        run: ./build.sh
+
+      - name: Build sidecar (Windows)
+        if: runner.os == 'Windows'
+        working-directory: sidecar
+        shell: cmd
+        run: .\build.bat
+
+      # ---- Frontend ----
+      - uses: pnpm/action-setup@v2
+        with:
+          version: '11.4.0'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install
+      - run: pnpm run build
+
+      # ---- Rust / Tauri build verification ----
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Tauri build verification
+        run: pnpm tauri build --target ${{ matrix.rust_target }}
