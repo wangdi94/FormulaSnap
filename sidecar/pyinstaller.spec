@@ -51,6 +51,8 @@ a = Analysis(
         # --- PIL / Pillow (used by pix2text) ---
         "PIL",
         "PIL.Image",
+        # --- SSL (Windows DLL bundling) ---
+        "ssl",
         # --- OCR engine SDKs ---
         "anthropic",
         "openai",
@@ -95,7 +97,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=True,
     upx=True,
-    console=False,  # --console: show terminal for debugging
+    console=True,  # --console: show terminal for debugging
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
