@@ -60,7 +60,19 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        # Heavy ML frameworks not needed
+        "torch",
+        "torchvision",
+        "torchaudio",
+        "wandb",
+        "ultralytics",
+        "pytorch-lightning",
+        "transformers",
+        "opencv-python",
+        "seaborn",
+        "matplotlib",
+    ],
     noarchive=False,
 )
 
@@ -81,7 +93,7 @@ exe = EXE(
     name="formulasnap-sidecar",
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
+    strip=True,
     upx=True,
     console=False,  # --console: show terminal for debugging
     disable_windowed_traceback=False,

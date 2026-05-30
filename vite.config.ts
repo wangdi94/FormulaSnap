@@ -9,6 +9,19 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
 
+  build: {
+    target: "esnext",
+    minify: "esbuild",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          mathlive: ["mathlive"],
+          vendor: ["react", "react-dom", "react-router-dom"],
+        },
+      },
+    },
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors

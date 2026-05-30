@@ -68,7 +68,7 @@ jobs:
           workspaces: src-tauri
 
       - name: Build and release
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -89,3 +89,62 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.rust_target }}
+
+      # ---- Build artifact size verification ----
+      - name: Verify build artifact sizes
+        shell: bash
+        run: |
+          echo "========================================="
+          echo "  Build Artifact Size Verification"
+          echo "========================================="
+
+          # Thresholds (in MB)
+          EXE_LIMIT=250
+          DMG_LIMIT=220
+
+          FAILED=false
+
+          # --- Sidecar binary ---
+          echo ""
+          echo "--- Sidecar Binary ---"
+          while IFS= read -r f; do
+            SIZE=$(ls -lh "$f" | awk '{print $5}')
+            echo "  $f: $SIZE"
+          done < <(find src-tauri/binaries -name "formulasnap-sidecar-*" -type f 2>/dev/null)
+
+          # --- Installer packages ---
+          echo ""
+          echo "--- Installer Packages ---"
+
+          # Check .exe (NSIS installer)
+          while IFS= read -r f; do
+            SIZE_MB=$(du -m "$f" | cut -f1)
+            echo "  $f: ${SIZE_MB}MB"
+            if [ "$SIZE_MB" -ge "$EXE_LIMIT" ]; then
+              echo "  ❌ FAIL: exceeds ${EXE_LIMIT}MB limit"
+              FAILED=true
+            fi
+          done < <(find src-tauri/target/release/bundle -name "*.exe" -type f 2>/dev/null)
+
+          # Check .dmg
+          while IFS= read -r f; do
+            SIZE_MB=$(du -m "$f" | cut -f1)
+            echo "  $f: ${SIZE_MB}MB"
+            if [ "$SIZE_MB" -ge "$DMG_LIMIT" ]; then
+              echo "  ❌ FAIL: exceeds ${DMG_LIMIT}MB limit"
+              FAILED=true
+            fi
+          done < <(find src-tauri/target/release/bundle -name "*.dmg" -type f 2>/dev/null)
+
+          # Report .msi (informational)
+          while IFS= read -r f; do
+            SIZE_MB=$(du -m "$f" | cut -f1)
+            echo "  $f: ${SIZE_MB}MB"
+          done < <(find src-tauri/target/release/bundle -name "*.msi" -type f 2>/dev/null)
+
+          echo ""
+          if [ "$FAILED" = true ]; then
+            echo "❌ Build artifact size verification FAILED"
+            exit 1
+          fi
+          echo "✅ All build artifact sizes within limits"
