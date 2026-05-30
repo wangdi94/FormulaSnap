@@ -124,7 +124,7 @@ jobs:
               echo "  ❌ FAIL: exceeds ${EXE_LIMIT}MB limit"
               FAILED=true
             fi
-          done < <(find src-tauri/target/release/bundle -name "*.exe" -type f 2>/dev/null)
+          done < <(find src-tauri/target/*/release/bundle -name "*.exe" -type f 2>/dev/null)
 
           # Check .dmg
           while IFS= read -r f; do
@@ -134,13 +134,13 @@ jobs:
               echo "  ❌ FAIL: exceeds ${DMG_LIMIT}MB limit"
               FAILED=true
             fi
-          done < <(find src-tauri/target/release/bundle -name "*.dmg" -type f 2>/dev/null)
+          done < <(find src-tauri/target/*/release/bundle -name "*.dmg" -type f 2>/dev/null)
 
           # Report .msi (informational)
           while IFS= read -r f; do
             SIZE_MB=$(du -m "$f" | cut -f1)
             echo "  $f: ${SIZE_MB}MB"
-          done < <(find src-tauri/target/release/bundle -name "*.msi" -type f 2>/dev/null)
+          done < <(find src-tauri/target/*/release/bundle -name "*.msi" -type f 2>/dev/null)
 
           echo ""
           if [ "$FAILED" = true ]; then
