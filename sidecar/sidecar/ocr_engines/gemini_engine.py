@@ -57,9 +57,9 @@ def _compress_image(image: bytes) -> bytes:
     """
     from PIL import Image
 
-    img = Image.open(io.BytesIO(image))
-
+    img = None
     try:
+        img = Image.open(io.BytesIO(image))
         # Convert to RGB if necessary (e.g. RGBA PNG)
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
@@ -95,7 +95,8 @@ def _compress_image(image: bytes) -> bytes:
             f"after 10 iterations (best effort: {len(data)} bytes)"
         )
     finally:
-        img.close()
+        if img is not None:
+            img.close()
 
 
 class GeminiEngine(LlmProvider):
