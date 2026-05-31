@@ -68,22 +68,57 @@ export default function SettingsPage() {
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [statsError, setStatsError] = useState<string | null>(null);
   const hotkeyRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  /* ── 加载设置和统计 ── */
-  useEffect(() => {
-    (async () => {
-      try {
-        const [s, st] = await Promise.all([loadSettings(), getStats()]);
-        setSettings(s);
-        setStats(st);
-      } catch (e) {
-        console.error('Failed to load settings:', e);
-      } finally {
-        setLoading(false);
+  /* ── 加载统计（带 5 秒超时） ── */
+  const fetchStats = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setStatsError(null);
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const result = await getStats();
+      if (!controller.signal.aborted) {
+        setStats(result);
       }
-    })();
+    } catch (e) {
+      if (!controller.signal.aborted) {
+        console.warn('Failed to load stats:', e);
+        setStatsError('统计数据不可用');
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
   }, []);
+
+  /* ── 独立加载设置 ── */
+  useEffect(() => {
+    loadSettings()
+      .then((s) => setSettings(s))
+      .catch((e) => {
+        console.warn('Failed to load settings, using defaults:', e);
+        setSettings({
+          hotkey: 'Ctrl+Shift+C',
+          default_backend: 'auto',
+          api_keys: {},
+          theme: 'system',
+          monthly_budget_usd: 10,
+          language: 'zh',
+        });
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  /* ── 独立加载统计 ── */
+  useEffect(() => {
+    fetchStats();
+    return () => abortRef.current?.abort();
+  }, [fetchStats]);
 
   /* ── 快捷键录制 ── */
   const handleRecordHotkey = useCallback(() => {
@@ -317,6 +352,17 @@ export default function SettingsPage() {
               unit="USD"
               highlight={stats.estimated_cost_usd > 0}
             />
+          </div>
+        ) : statsError ? (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-red-500 dark:text-red-400">{statsError}</span>
+            <button
+              type="button"
+              onClick={fetchStats}
+              className="px-3 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+            >
+              重试
+            </button>
           </div>
         ) : (
           <div className="text-sm text-gray-400 dark:text-gray-500">加载统计中...</div>
