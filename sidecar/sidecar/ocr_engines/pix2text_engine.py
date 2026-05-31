@@ -7,6 +7,7 @@ formulas and text from images.  No API key required, no cost.
 from __future__ import annotations
 
 import io
+import threading
 import time
 from typing import Optional
 
@@ -54,6 +55,8 @@ class Pix2TextEngine:
     Implements the OcrBackend Protocol (structural subtyping).
     """
 
+    _init_lock = threading.Lock()
+
     def __init__(self) -> None:
         self._p2t = None
         self._initialized = False
@@ -64,9 +67,14 @@ class Pix2TextEngine:
 
     def _ensure_initialized(self) -> None:
         """Lazily create the Pix2Text client on first use."""
-        if not self._initialized and Pix2Text is not None:
-            self._p2t = Pix2Text.from_config()
-            self._initialized = True
+        if self._initialized:
+            return
+        with self._init_lock:
+            if self._initialized:  # double-check
+                return
+            if Pix2Text is not None:
+                self._p2t = Pix2Text.from_config()
+                self._initialized = True
 
     # ------------------------------------------------------------------
     # OcrBackend Protocol methods
