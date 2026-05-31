@@ -8,7 +8,7 @@ mod sidecar;
 mod tray;
 
 use std::sync::Mutex;
-use tauri::window::WindowEvent;
+use tauri::WindowEvent;
 use tauri::Manager;
 
 pub struct DbConn(pub Mutex<rusqlite::Connection>);

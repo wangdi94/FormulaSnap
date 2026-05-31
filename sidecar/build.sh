@@ -67,7 +67,7 @@ mkdir -p "$OUTPUT_DIR"
 # ---------------------------------------------------------------------------
 echo "==> Running PyInstaller..."
 cd "$SCRIPT_DIR"
-pyinstaller pyinstaller.spec --noconfirm --clean --collect-submodules ssl
+pyinstaller pyinstaller.spec --noconfirm --clean
 
 # ---------------------------------------------------------------------------
 # Copy output to Tauri binaries directory

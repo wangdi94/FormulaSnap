@@ -50,7 +50,7 @@ REM Build with PyInstaller
 REM ---------------------------------------------------------------------------
 echo ==^> Running PyInstaller...
 cd /d "%SCRIPT_DIR%"
-pyinstaller pyinstaller.spec --noconfirm --clean --collect-submodules ssl
+pyinstaller pyinstaller.spec --noconfirm --clean
 if errorlevel 1 (
     echo ERROR: PyInstaller build failed.
     exit /b 1

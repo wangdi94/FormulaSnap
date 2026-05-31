@@ -108,7 +108,7 @@ jobs:
           echo ""
           echo "--- Sidecar Binary ---"
           while IFS= read -r f; do
-            SIZE=$(ls -lh "$f" | awk '{print $5}')
+            SIZE=$(du -h "$f" | cut -f1)
             echo "  $f: $SIZE"
           done < <(find src-tauri/binaries -name "formulasnap-sidecar-*" -type f 2>/dev/null)
 
