@@ -53,9 +53,17 @@ pub fn open_accessibility_settings() {
     {
         // macOS Ventura (13)+ 使用新的 System Settings URL scheme
         // 旧版本使用 System Preferences
-        let _ = std::process::Command::new("open")
+        match std::process::Command::new("open")
             .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
-            .spawn();
+            .spawn()
+        {
+            Ok(child) => {
+                log::debug!("已打开辅助功能设置页面 (PID: {:?})", child.id());
+            }
+            Err(e) => {
+                log::warn!("打开辅助功能设置页面失败: {}", e);
+            }
+        }
     }
 }
 
