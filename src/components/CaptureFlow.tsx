@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { callOcr, type OcrResponse, SidecarError } from "../lib/sidecarClient";
 import FormulaPreview from "./FormulaPreview";
 
-type FlowState = "idle" | "capturing" | "ocr-loading" | "result" | "error";
+type FlowState = "idle" | "selecting" | "capturing" | "ocr-loading" | "result" | "error";
 
 interface FlowError {
   message: string;
@@ -70,35 +70,47 @@ export default function CaptureFlow() {
     [backend],
   );
 
-  const handleCaptureEvent = useCallback(
-    async (base64: string) => {
-      setImageBase64(base64);
-      setState("capturing");
-      await runOcr(base64);
-    },
-    [runOcr],
-  );
-
-  useEffect(() => {
-    const unlisten = listen<string>("capture-requested", (event) => {
-      handleCaptureEvent(event.payload);
-    });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [handleCaptureEvent]);
-
   const handleManualCapture = useCallback(async () => {
-    setState("capturing");
+    setState("selecting");
     setError(null);
     try {
-      const base64 = await invoke<string>("capture_screen_base64");
-      setImageBase64(base64);
-      await runOcr(base64);
+      await invoke("open_selection_window");
     } catch (err) {
       setError(mapSidecarError(err));
       setState("error");
     }
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen("open-selection", () => {
+      handleManualCapture();
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [handleManualCapture]);
+
+  useEffect(() => {
+    const unlisten = listen<{ x: number; y: number; width: number; height: number }>(
+      "selection-result",
+      async (event) => {
+        const { x, y, width, height } = event.payload;
+        setState("capturing");
+        try {
+          const base64 = await invoke<string>("capture_region_base64", {
+            x, y, width, height,
+          });
+          setImageBase64(base64);
+          await runOcr(base64);
+        } catch (err) {
+          setError(mapSidecarError(err));
+          setState("error");
+        }
+      },
+    );
+    return () => {
+      unlisten.then((fn) => fn());
+    };
   }, [runOcr]);
 
   const handleRetry = useCallback(() => {
@@ -135,8 +147,19 @@ export default function CaptureFlow() {
             onClick={handleManualCapture}
             className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium"
           >
-            手动截图
+            选择区域截图
           </button>
+        </div>
+      )}
+
+      {state === "selecting" && (
+        <div className="flex flex-col items-center space-y-4 py-12">
+          <div className="animate-pulse flex space-x-1">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+          </div>
+          <p className="text-gray-500 dark:text-gray-400">请在全屏覆盖层中拖拽选择区域...</p>
         </div>
       )}
 

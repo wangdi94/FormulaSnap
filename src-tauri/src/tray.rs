@@ -4,8 +4,6 @@ use tauri::{
     AppHandle, Emitter, Manager, Runtime,
 };
 
-use crate::screenshot;
-
 /// Menu item IDs used in the system tray.
 pub const MENU_ID_SCREENSHOT: &str = "screenshot";
 pub const MENU_ID_HISTORY: &str = "history";
@@ -53,16 +51,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                     let _ = window.show();
                     let _ = window.set_focus();
                 }
-                match screenshot::capture_screen() {
-                    Ok(png_bytes) => {
-                        use base64::Engine;
-                        let b64 = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
-                        let _ = app.emit("capture-requested", b64);
-                    }
-                    Err(e) => {
-                        log::error!("Tray screenshot capture failed: {e}");
-                    }
-                }
+                let _ = app.emit("open-selection", ());
             }
             MENU_ID_HISTORY => {
                 if let Some(window) = app.get_webview_window("main") {

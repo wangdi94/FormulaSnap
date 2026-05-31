@@ -30,6 +30,37 @@ fn capture_region_base64(x: u32, y: u32, width: u32, height: u32) -> Result<Stri
     Ok(base64::engine::general_purpose::STANDARD.encode(&png_bytes))
 }
 
+/// 截取全屏并返回 base64（供区域选择使用）。
+#[tauri::command]
+fn capture_screen_for_selection() -> Result<String, String> {
+    let png_bytes = screenshot::capture_screen().map_err(|e| e.to_string())?;
+    use base64::Engine;
+    Ok(base64::engine::general_purpose::STANDARD.encode(&png_bytes))
+}
+
+/// 打开透明全屏区域选择窗口。
+#[tauri::command]
+fn open_selection_window(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::WebviewWindowBuilder;
+
+    if let Some(existing) = app.get_webview_window("selection") {
+        let _ = existing.show();
+        let _ = existing.set_focus();
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(&app, "selection", tauri::WebviewUrl::App("/selection".into()))
+        .title("选择区域")
+        .transparent(true)
+        .decorations(false)
+        .fullscreen(true)
+        .always_on_top(true)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 #[tauri::command]
 fn get_history(
     state: tauri::State<'_, DbConn>,
@@ -112,6 +143,8 @@ pub fn run() {
             save_setting,
             capture_screen_base64,
             capture_region_base64,
+            capture_screen_for_selection,
+            open_selection_window,
             sidecar::get_sidecar_port,
             permissions::get_accessibility_permission,
             permissions::open_accessibility_settings_cmd,

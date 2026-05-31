@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
 import Header from "./components/Header";
 import StatusBar from "./components/StatusBar";
@@ -7,6 +7,7 @@ import HomePage from "./pages/HomePage";
 import HistoryPage from "./pages/HistoryPage";
 import HistoryDetailPage from "./pages/HistoryDetailPage";
 import SettingsPage from "./pages/SettingsPage";
+import SelectionPage from "./pages/SelectionPage";
 import { applyTheme, getTheme } from "./lib/theme";
 import "./App.css";
 
@@ -25,7 +26,26 @@ function NavigationListener() {
   return null;
 }
 
+function MainLayout() {
+  return (
+    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
+      <Header />
+      <main className="flex-1 overflow-auto">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/history/:id" element={<HistoryDetailPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Routes>
+      </main>
+      <StatusBar />
+    </div>
+  );
+}
+
 function App() {
+  const location = useLocation();
+
   useEffect(() => {
     applyTheme(getTheme());
 
@@ -37,23 +57,29 @@ function App() {
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
+  if (location.pathname === "/selection") {
+    return (
+      <>
+        <NavigationListener />
+        <SelectionPage />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <NavigationListener />
+      <MainLayout />
+    </>
+  );
+}
+
+function AppWithRouter() {
   return (
     <BrowserRouter>
-      <NavigationListener />
-      <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
-        <Header />
-        <main className="flex-1 overflow-auto">
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/history" element={<HistoryPage />} />
-            <Route path="/history/:id" element={<HistoryDetailPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
-        </main>
-        <StatusBar />
-      </div>
+      <App />
     </BrowserRouter>
   );
 }
 
-export default App;
+export default AppWithRouter;
