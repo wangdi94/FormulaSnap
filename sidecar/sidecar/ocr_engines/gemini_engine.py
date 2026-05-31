@@ -104,6 +104,7 @@ class GeminiEngine(LlmProvider):
 
     def __init__(self, api_key: Optional[str] = None):
         self._api_key = api_key or os.environ.get("GEMINI_API_KEY", "")
+        self._client = None  # 延迟初始化
 
     async def recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
         """Recognize math in image via Gemini 2.5 Pro Vision."""
@@ -124,7 +125,9 @@ class GeminiEngine(LlmProvider):
         mime_type = detect_mime_type(image)
 
         try:
-            client = genai.Client(api_key=self._api_key)
+            if self._client is None:
+                self._client = genai.Client(api_key=self._api_key)
+            client = self._client
 
             image_part = types.Part.from_bytes(
                 data=effective_image, mime_type=mime_type

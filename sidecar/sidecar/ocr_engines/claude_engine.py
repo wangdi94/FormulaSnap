@@ -48,6 +48,7 @@ class ClaudeEngine(LlmProvider):
 
     def __init__(self, api_key: Optional[str] = None):
         self._api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+        self._client = None  # 延迟初始化
 
     async def recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
         """Recognize math in image via Claude Sonnet Vision."""
@@ -60,7 +61,9 @@ class ClaudeEngine(LlmProvider):
         start_time = time.time()
         image_base64 = base64.b64encode(image).decode()
 
-        client = anthropic.Anthropic(api_key=self._api_key)
+        if self._client is None:
+            self._client = anthropic.Anthropic(api_key=self._api_key)
+        client = self._client
 
         try:
             response = client.messages.create(
