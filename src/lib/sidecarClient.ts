@@ -5,7 +5,11 @@
  * 所有 OCR 请求和状态查询都走这个客户端。
  */
 
-const SIDECAR_BASE_URL = 'http://localhost:8477';
+import type { OcrBackend } from '../types/ocr';
+export type { OcrBackend } from '../types/ocr';
+
+const SIDECAR_PORT = import.meta.env.VITE_SIDECAR_PORT ?? '8477';
+const SIDECAR_BASE_URL = `http://localhost:${SIDECAR_PORT}`;
 
 // ---------------------------------------------------------------------------
 // 类型定义
@@ -14,14 +18,14 @@ const SIDECAR_BASE_URL = 'http://localhost:8477';
 /** OCR 请求参数 */
 export interface OcrRequest {
   imageBase64: string;
-  backend?: string;
+  backend?: OcrBackend | 'auto';
 }
 
 /** OCR 响应 */
 export interface OcrResponse {
   latex: string;
   confidence: number;
-  backend: string;
+  backend: OcrBackend;
   timing_ms: number;
   cost_estimate?: {
     tokens_used?: number;
@@ -117,7 +121,7 @@ export async function healthCheck(): Promise<HealthResponse> {
  */
 export async function callOcr(
   imageBase64: string,
-  backend: string = 'pix2text',
+  backend: OcrBackend | 'auto' = 'pix2text',
 ): Promise<OcrResponse> {
   return request<OcrResponse>('/api/ocr', {
     method: 'POST',
