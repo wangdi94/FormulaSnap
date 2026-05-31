@@ -84,7 +84,11 @@ export default function SettingsPage() {
     try {
       const result = await getStats();
       if (!controller.signal.aborted) {
-        setStats(result);
+        if (result === null) {
+          setStatsError('统计数据不可用');
+        } else {
+          setStats(result);
+        }
       }
     } catch (e) {
       if (!controller.signal.aborted) {

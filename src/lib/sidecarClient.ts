@@ -129,10 +129,23 @@ export async function callOcr(
 }
 
 /**
- * 获取 OCR 使用统计
+ * 获取 OCR 使用统计（带 5 秒超时）
+ *
+ * 超时后返回 null，避免前端因 sidecar 无响应而卡住
  */
-export async function getStats(): Promise<StatsResponse> {
-  return request<StatsResponse>('/api/stats');
+export async function getStats(): Promise<StatsResponse | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    return await request<StatsResponse>('/api/stats', {
+      signal: controller.signal,
+    });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /**
