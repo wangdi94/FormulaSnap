@@ -34,9 +34,9 @@ export default function SelectionPage() {
   }, []);
 
   const handleSelected = useCallback(
-    (rect: SelectionRect) => {
-      emit("selection-result", rect);
-      setTimeout(() => getCurrentWindow().close(), 50);
+    async (rect: SelectionRect) => {
+      await emit("selection-result", rect);
+      await getCurrentWindow().close();
     },
     [],
   );
