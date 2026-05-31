@@ -214,20 +214,22 @@ class MacKeychainBackend(KeyBackend):
         self.delete_key(service, key_name)
 
         try:
-            subprocess.run(
+            process = subprocess.Popen(
                 [
                     "security",
                     "add-generic-password",
                     "-s", SERVICE_NAME,
                     "-a", account,
-                    "-w", key_value,
                     "-U",  # update if exists
                 ],
-                capture_output=True,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=10,
-                check=True,
             )
+            process.communicate(input=key_value, timeout=10)
+            if process.returncode != 0:
+                raise subprocess.CalledProcessError(process.returncode, "security")
             logger.info("Stored key in Keychain for %s/%s (%s)", service, key_name, _mask_key(key_value))
         except subprocess.SubprocessError as e:
             logger.error("Failed to store key in Keychain for %s/%s: %s", service, key_name, e)
