@@ -39,7 +39,12 @@ impl Log for FileLogger {
             if file.write_all(message.as_bytes()).is_err() {
                 eprint!("{}", message);
             }
-            let _ = file.flush();
+            if file.flush().is_err() {
+                eprintln!("[logger] flush failed");
+            }
+        } else {
+            // mutex 中毒时降级到 stderr
+            eprint!("{}", message);
         }
     }
 
