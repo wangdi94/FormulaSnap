@@ -17,6 +17,7 @@ from sidecar.ocr_engines.interface import (
     ApiKeyError,
     CostEstimate,
     NetworkError,
+    OcrError,
     OcrOptions,
     OcrResult,
     RateLimitError,
@@ -102,6 +103,11 @@ class MathpixEngine:
         if response.status_code >= 500:
             raise NetworkError(
                 f"Mathpix server error: {response.status_code}"
+            )
+
+        if 400 <= response.status_code < 500:
+            raise OcrError(
+                f"Mathpix client error: {response.status_code} {response.text}"
             )
 
         response.raise_for_status()
