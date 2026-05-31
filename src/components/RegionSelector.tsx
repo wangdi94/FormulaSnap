@@ -162,7 +162,6 @@ export default function RegionSelector({
       }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
     />
   );
 }
