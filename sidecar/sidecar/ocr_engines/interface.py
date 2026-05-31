@@ -54,16 +54,17 @@ class OcrResult:
 
     Attributes:
         latex: Recognized LaTeX string.
-        confidence: Confidence score between 0.0 and 1.0.
+        confidence: Confidence score between 0.0 and 1.0, or None if
+            the backend does not provide confidence (e.g. LLM engines).
         backend: Name of the backend that produced this result.
         timing_ms: Time taken for recognition in milliseconds.
         cost_estimate: Optional cost estimate for this operation.
     """
 
     latex: str
-    confidence: float
     backend: str
     timing_ms: int
+    confidence: Optional[float] = None
     cost_estimate: Optional[CostEstimate] = None
 
 

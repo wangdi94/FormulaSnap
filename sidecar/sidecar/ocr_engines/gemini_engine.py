@@ -13,12 +13,18 @@ from typing import Optional
 try:
     from google import genai
     from google.genai import types
+    from google.genai import errors as genai_errors
 
     GEMINI_AVAILABLE = True
+    _ClientError = genai_errors.ClientError
+    _ServerError = genai_errors.ServerError
 except ImportError:
     genai = None  # type: ignore[assignment]
     types = None  # type: ignore[assignment]
+    genai_errors = None  # type: ignore[assignment]
     GEMINI_AVAILABLE = False
+    _ClientError = Exception
+    _ServerError = Exception
 
 from sidecar.ocr_engines.interface import (
     ApiKeyError,
@@ -26,6 +32,7 @@ from sidecar.ocr_engines.interface import (
     NetworkError,
     OcrOptions,
     OcrResult,
+    RateLimitError as OcrRateLimitError,
     RateLimitStatus,
     ValidationResult,
 )
@@ -41,6 +48,21 @@ GEMINI_IMAGE_LIMIT = 7 * 1024 * 1024
 GEMINI_MODEL = "gemini-2.5-pro"
 
 
+def _detect_mime_type(image: bytes) -> str:
+    """Detect image MIME type from magic bytes.
+
+    Returns 'image/png' for PNG, 'image/gif' for GIF, 'image/webp' for WebP,
+    and 'image/jpeg' as default fallback.
+    """
+    if image[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if image[:3] == b"GIF":
+        return "image/gif"
+    if image[:4] == b"RIFF" and image[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/jpeg"
+
+
 def _compress_image(image: bytes) -> bytes:
     """Compress an image that exceeds Gemini's 7 MB inline limit.
 
@@ -51,37 +73,43 @@ def _compress_image(image: bytes) -> bytes:
 
     img = Image.open(io.BytesIO(image))
 
-    # Convert to RGB if necessary (e.g. RGBA PNG)
-    if img.mode in ("RGBA", "P"):
-        img = img.convert("RGB")
+    try:
+        # Convert to RGB if necessary (e.g. RGBA PNG)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
 
-    # Progressive downscale + quality reduction
-    quality = 85
-    max_side = 2048
-    data = b""
+        # Progressive downscale + quality reduction
+        quality = 85
+        max_side = 2048
+        data = b""
 
-    # Use LANCZOS resampling (int constant 1 for broad compatibility)
-    lanczos = getattr(Image, "LANCZOS", getattr(Image.Resampling, "LANCZOS", 1))
+        # Use LANCZOS resampling (int constant 1 for broad compatibility)
+        lanczos = getattr(Image, "LANCZOS", getattr(Image.Resampling, "LANCZOS", 1))
 
-    for _ in range(10):  # max 10 iterations
-        # Resize if largest side exceeds max_side
-        w, h = img.size
-        if max(w, h) > max_side:
-            scale = max_side / max(w, h)
-            img = img.resize((int(w * scale), int(h * scale)), lanczos)
+        for _ in range(10):  # max 10 iterations
+            # Resize if largest side exceeds max_side
+            w, h = img.size
+            if max(w, h) > max_side:
+                scale = max_side / max(w, h)
+                img = img.resize((int(w * scale), int(h * scale)), lanczos)
 
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=quality, optimize=True)
-        data = buf.getvalue()
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=quality, optimize=True)
+            data = buf.getvalue()
 
-        if len(data) <= GEMINI_IMAGE_LIMIT:
-            return data
+            if len(data) <= GEMINI_IMAGE_LIMIT:
+                return data
 
-        # Reduce quality and max_side for next iteration
-        quality = max(quality - 15, 30)
-        max_side = int(max_side * 0.75)
+            # Reduce quality and max_side for next iteration
+            quality = max(quality - 15, 30)
+            max_side = int(max_side * 0.75)
 
-    return data  # best effort
+        raise ValueError(
+            f"Unable to compress image below {GEMINI_IMAGE_LIMIT} bytes "
+            f"after 10 iterations (best effort: {len(data)} bytes)"
+        )
+    finally:
+        img.close()
 
 
 class GeminiEngine(LlmProvider):
@@ -90,7 +118,7 @@ class GeminiEngine(LlmProvider):
     def __init__(self, api_key: Optional[str] = None):
         self._api_key = api_key or os.environ.get("GEMINI_API_KEY", "")
 
-    def recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
+    async def recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
         """Recognize math in image via Gemini 2.5 Pro Vision."""
         if not self._api_key:
             raise ApiKeyError("Gemini API key not configured")
@@ -105,11 +133,14 @@ class GeminiEngine(LlmProvider):
         if len(image) > GEMINI_IMAGE_LIMIT:
             effective_image = _compress_image(image)
 
+        # Detect MIME type from original image (before compression)
+        mime_type = _detect_mime_type(image)
+
         try:
             client = genai.Client(api_key=self._api_key)
 
             image_part = types.Part.from_bytes(
-                data=effective_image, mime_type="image/jpeg"
+                data=effective_image, mime_type=mime_type
             )
 
             response = client.models.generate_content(
@@ -122,6 +153,18 @@ class GeminiEngine(LlmProvider):
                     system_instruction=self._build_ocr_prompt(),
                 ),
             )
+        except _ClientError as exc:
+            # 401/403 → authentication error, 429 → rate limit
+            code = getattr(exc, "code", 0)
+            if code in (401, 403):
+                raise ApiKeyError("Invalid Gemini API key") from exc
+            if code == 429:
+                raise OcrRateLimitError(
+                    "Gemini rate limit exceeded", retry_after=60
+                ) from exc
+            raise NetworkError(f"Gemini API error: {exc}") from exc
+        except _ServerError as exc:
+            raise NetworkError(f"Gemini server error: {exc}") from exc
         except (ConnectionError, TimeoutError, OSError) as exc:
             raise NetworkError(f"Gemini network error: {exc}") from exc
 
@@ -141,7 +184,7 @@ class GeminiEngine(LlmProvider):
 
         return OcrResult(
             latex=latex,
-            confidence=0.9,  # LLM doesn't provide confidence
+            confidence=None,  # LLM doesn't provide confidence
             backend="gemini",
             timing_ms=timing_ms,
             cost_estimate=CostEstimate(

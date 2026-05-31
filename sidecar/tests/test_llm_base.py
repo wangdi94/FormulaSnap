@@ -3,7 +3,10 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from sidecar.ocr_engines.openai_engine import OpenAIEngine
-from sidecar.ocr_engines.interface import OcrOptions, OcrResult, ApiKeyError
+from sidecar.ocr_engines.interface import (
+    OcrOptions, OcrResult, ApiKeyError,
+    NetworkError, RateLimitError,
+)
 
 
 class TestOpenAIEngine:
@@ -18,7 +21,7 @@ class TestOpenAIEngine:
         mod.OPENAI_AVAILABLE = self._orig_avail
 
     @patch('sidecar.ocr_engines.openai_engine.openai')
-    def test_recognize_success(self, mock_openai):
+    async def test_recognize_success(self, mock_openai):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "$E = mc^2$"
@@ -27,7 +30,7 @@ class TestOpenAIEngine:
         mock_response.usage.completion_tokens = 50
         mock_openai.chat.completions.create.return_value = mock_response
 
-        result = self.engine.recognize(b"fake_image", OcrOptions())
+        result = await self.engine.recognize(b"fake_image", OcrOptions())
 
         assert isinstance(result, OcrResult)
         assert "E = mc^2" in result.latex
@@ -35,7 +38,7 @@ class TestOpenAIEngine:
         assert result.cost_estimate is not None
 
     @patch('sidecar.ocr_engines.openai_engine.openai')
-    def test_recognize_strips_markdown(self, mock_openai):
+    async def test_recognize_strips_markdown(self, mock_openai):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "```latex\n\\frac{a}{b}\n```"
@@ -44,7 +47,7 @@ class TestOpenAIEngine:
         mock_response.usage.completion_tokens = 50
         mock_openai.chat.completions.create.return_value = mock_response
 
-        result = self.engine.recognize(b"fake_image", OcrOptions())
+        result = await self.engine.recognize(b"fake_image", OcrOptions())
 
         assert "```" not in result.latex
         assert "\\frac{a}{b}" in result.latex
@@ -62,3 +65,77 @@ class TestOpenAIEngine:
     def test_validate_config_with_key(self):
         result = self.engine.validate_config()
         assert result.valid is True
+
+    def test_get_rate_limit_status_returns_none(self):
+        """OpenAI SDK does not expose rate limit info."""
+        assert self.engine.get_rate_limit_status() is None
+
+    # -- error mapping -------------------------------------------------------
+
+    @patch('sidecar.ocr_engines.openai_engine.openai')
+    async def test_recognize_authentication_error(self, mock_openai):
+        """OpenAI AuthenticationError is mapped to ApiKeyError."""
+        auth_err = type("AuthenticationError", (Exception,), {})
+        mock_openai.AuthenticationError = auth_err
+        mock_openai.chat.completions.create.side_effect = auth_err("bad key")
+
+        import sidecar.ocr_engines.openai_engine as mod
+        original = mod._AuthenticationError
+        mod._AuthenticationError = auth_err
+
+        with pytest.raises(ApiKeyError, match="Invalid OpenAI API key"):
+            await self.engine.recognize(b"fake_image", OcrOptions())
+
+        mod._AuthenticationError = original
+
+    @patch('sidecar.ocr_engines.openai_engine.openai')
+    async def test_recognize_rate_limit_error(self, mock_openai):
+        """OpenAI RateLimitError is mapped to ocr RateLimitError."""
+        rate_err = type("RateLimitError", (Exception,), {})
+        mock_openai.RateLimitError = rate_err
+        mock_openai.chat.completions.create.side_effect = rate_err("rate limited")
+
+        import sidecar.ocr_engines.openai_engine as mod
+        original = mod._RateLimitError
+        mod._RateLimitError = rate_err
+
+        with pytest.raises(RateLimitError, match="OpenAI rate limit"):
+            await self.engine.recognize(b"fake_image", OcrOptions())
+
+        mod._RateLimitError = original
+
+    @patch('sidecar.ocr_engines.openai_engine.openai')
+    async def test_recognize_connection_error(self, mock_openai):
+        """OpenAI APIConnectionError is mapped to NetworkError."""
+        conn_err = type("APIConnectionError", (Exception,), {})
+        mock_openai.APIConnectionError = conn_err
+        mock_openai.chat.completions.create.side_effect = conn_err("connection failed")
+
+        import sidecar.ocr_engines.openai_engine as mod
+        original = mod._APIConnectionError
+        mod._APIConnectionError = conn_err
+
+        with pytest.raises(NetworkError, match="Failed to connect to OpenAI"):
+            await self.engine.recognize(b"fake_image", OcrOptions())
+
+        mod._APIConnectionError = original
+
+    async def test_recognize_no_key_raises(self):
+        """Recognize with empty key raises ApiKeyError immediately."""
+        engine = OpenAIEngine(api_key="")
+        with pytest.raises(ApiKeyError, match="not configured"):
+            await engine.recognize(b"img", OcrOptions())
+
+    async def test_recognize_package_not_installed(self):
+        """When openai is missing, recognize raises ApiKeyError."""
+        import sidecar.ocr_engines.openai_engine as mod
+        orig_avail = mod.OPENAI_AVAILABLE
+        orig_mod = mod.openai
+        mod.OPENAI_AVAILABLE = False
+        mod.openai = None  # type: ignore[assignment]
+
+        with pytest.raises(ApiKeyError, match="not installed"):
+            await self.engine.recognize(b"img", OcrOptions())
+
+        mod.OPENAI_AVAILABLE = orig_avail
+        mod.openai = orig_mod

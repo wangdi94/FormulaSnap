@@ -2,16 +2,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import type { HistoryEntry } from "../types/history";
+import { BACKEND_LABELS } from "../lib/constants";
 
 const PAGE_SIZE = 20;
-
-const BACKEND_LABELS: Record<string, string> = {
-  pix2text: "Pix2Text",
-  mathpix: "Mathpix",
-  openai: "OpenAI",
-  claude: "Claude",
-  gemini: "Gemini",
-};
 
 const BACKEND_COLORS: Record<string, string> = {
   pix2text: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
@@ -163,7 +156,7 @@ export default function HistoryPage() {
 
       {/* 列表 */}
       {loading ? (
-        <div className="flex items-center justify-center py-20">
+        <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
           <div className="flex items-center gap-3 text-gray-400 dark:text-gray-500">
             <svg
               className="animate-spin h-5 w-5"

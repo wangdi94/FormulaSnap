@@ -47,7 +47,7 @@ class MathpixEngine:
     # OcrBackend protocol methods
     # ------------------------------------------------------------------
 
-    def recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
+    async def recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
         """Recognize mathematical content in an image via Mathpix API.
 
         Args:
@@ -83,9 +83,10 @@ class MathpixEngine:
         }
 
         try:
-            response = httpx.post(
-                MATHPIX_API_URL, json=payload, headers=headers, timeout=30
-            )
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    MATHPIX_API_URL, json=payload, headers=headers, timeout=30
+                )
         except httpx.RequestError as exc:
             raise NetworkError(f"Network error: {exc}") from exc
 

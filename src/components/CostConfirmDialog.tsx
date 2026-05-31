@@ -38,8 +38,8 @@ export default function CostConfirmDialog({
   );
 
   return (
-    <button
-      type="button"
+    // biome-ignore lint/a11y/noStaticElementInteractions: 模态遮罩层需要点击/键盘事件
+    <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 cursor-default"
       onClick={handleOverlayClick}
       onKeyDown={handleOverlayKeyDown}
@@ -149,6 +149,6 @@ export default function CostConfirmDialog({
           </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }

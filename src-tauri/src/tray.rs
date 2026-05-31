@@ -4,6 +4,12 @@ use tauri::{
     AppHandle, Emitter, Manager, Runtime,
 };
 
+#[cfg(target_os = "macos")]
+const SHORTCUT_LABEL: &str = "截图 (⌘+Shift+C)";
+
+#[cfg(not(target_os = "macos"))]
+const SHORTCUT_LABEL: &str = "截图 (Ctrl+Shift+C)";
+
 /// Menu item IDs used in the system tray.
 pub const MENU_ID_SCREENSHOT: &str = "screenshot";
 pub const MENU_ID_HISTORY: &str = "history";
@@ -26,7 +32,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let screenshot_i = MenuItem::with_id(
         app,
         MENU_ID_SCREENSHOT,
-        "截图 (Ctrl+Shift+C)",
+        SHORTCUT_LABEL,
         true,
         None::<&str>,
     )?;
@@ -55,29 +61,51 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             }
             MENU_ID_SCREENSHOT => {
                 if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
+                    if let Err(e) = window.show() {
+                        log::warn!("显示主窗口失败: {}", e);
+                    }
+                    if let Err(e) = window.set_focus() {
+                        log::warn!("聚焦主窗口失败: {}", e);
+                    }
                 }
-                let _ = app.emit("open-selection", ());
+                if let Err(e) = app.emit("open-selection", ()) {
+                    log::warn!("发送 open-selection 事件失败: {}", e);
+                }
             }
             MENU_ID_HISTORY => {
                 if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
+                    if let Err(e) = window.show() {
+                        log::warn!("显示主窗口失败: {}", e);
+                    }
+                    if let Err(e) = window.set_focus() {
+                        log::warn!("聚焦主窗口失败: {}", e);
+                    }
                 }
-                let _ = app.emit("navigate", "/history");
+                if let Err(e) = app.emit("navigate", "/history") {
+                    log::warn!("发送 navigate 事件失败: {}", e);
+                }
             }
             MENU_ID_SETTINGS => {
                 if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
+                    if let Err(e) = window.show() {
+                        log::warn!("显示主窗口失败: {}", e);
+                    }
+                    if let Err(e) = window.set_focus() {
+                        log::warn!("聚焦主窗口失败: {}", e);
+                    }
                 }
-                let _ = app.emit("navigate", "/settings");
+                if let Err(e) = app.emit("navigate", "/settings") {
+                    log::warn!("发送 navigate 事件失败: {}", e);
+                }
             }
             MENU_ID_ABOUT => {
                 if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
+                    if let Err(e) = window.show() {
+                        log::warn!("显示主窗口失败: {}", e);
+                    }
+                    if let Err(e) = window.set_focus() {
+                        log::warn!("聚焦主窗口失败: {}", e);
+                    }
                 }
             }
             _ => {}
@@ -92,10 +120,16 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                 let app = tray.app_handle();
                 if let Some(window) = app.get_webview_window("main") {
                     if window.is_visible().unwrap_or(false) {
-                        let _ = window.hide();
+                        if let Err(e) = window.hide() {
+                            log::warn!("隐藏主窗口失败: {}", e);
+                        }
                     } else {
-                        let _ = window.show();
-                        let _ = window.set_focus();
+                        if let Err(e) = window.show() {
+                            log::warn!("显示主窗口失败: {}", e);
+                        }
+                        if let Err(e) = window.set_focus() {
+                            log::warn!("聚焦主窗口失败: {}", e);
+                        }
                     }
                 }
             }

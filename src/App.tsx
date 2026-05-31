@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, useNavigate, useLocation } from "react-ro
 import { listen } from "@tauri-apps/api/event";
 import Header from "./components/Header";
 import StatusBar from "./components/StatusBar";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { ToastProvider } from "./components/Toast";
 import HomePage from "./pages/HomePage";
 import HistoryPage from "./pages/HistoryPage";
 import HistoryDetailPage from "./pages/HistoryDetailPage";
@@ -69,7 +71,9 @@ function App() {
   return (
     <>
       <NavigationListener />
-      <MainLayout />
+      <ErrorBoundary>
+        <MainLayout />
+      </ErrorBoundary>
     </>
   );
 }
@@ -77,7 +81,9 @@ function App() {
 function AppWithRouter() {
   return (
     <BrowserRouter>
-      <App />
+      <ToastProvider>
+        <App />
+      </ToastProvider>
     </BrowserRouter>
   );
 }

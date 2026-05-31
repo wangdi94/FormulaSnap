@@ -54,13 +54,13 @@ class TestClaudeEngine:
     # -- recognize success --------------------------------------------------
 
     @patch("sidecar.ocr_engines.claude_engine.anthropic")
-    def test_recognize_success(self, mock_anthropic):
+    async def test_recognize_success(self, mock_anthropic):
         """Successful OCR returns OcrResult with correct fields."""
         mock_client = MagicMock()
         mock_anthropic.Anthropic.return_value = mock_client
         mock_client.messages.create.return_value = _mock_anthropic_response("$E = mc^2$")
 
-        result = self.engine.recognize(b"fake_image", OcrOptions())
+        result = await self.engine.recognize(b"fake_image", OcrOptions())
 
         assert isinstance(result, OcrResult)
         assert "E = mc^2" in result.latex
@@ -73,7 +73,7 @@ class TestClaudeEngine:
     # -- markdown stripping -------------------------------------------------
 
     @patch("sidecar.ocr_engines.claude_engine.anthropic")
-    def test_recognize_strips_markdown(self, mock_anthropic):
+    async def test_recognize_strips_markdown(self, mock_anthropic):
         """Response wrapped in markdown fences is cleaned."""
         mock_client = MagicMock()
         mock_anthropic.Anthropic.return_value = mock_client
@@ -81,7 +81,7 @@ class TestClaudeEngine:
             "```latex\n\\frac{a}{b}\n```"
         )
 
-        result = self.engine.recognize(b"fake_image", OcrOptions())
+        result = await self.engine.recognize(b"fake_image", OcrOptions())
 
         assert "```" not in result.latex
         assert "\\frac{a}{b}" in result.latex
@@ -89,7 +89,7 @@ class TestClaudeEngine:
     # -- invalid API key ----------------------------------------------------
 
     @patch("sidecar.ocr_engines.claude_engine.anthropic")
-    def test_recognize_authentication_error(self, mock_anthropic):
+    async def test_recognize_authentication_error(self, mock_anthropic):
         """AnthropicAuthenticationError is mapped to ApiKeyError."""
         mock_client = MagicMock()
         mock_anthropic.Anthropic.return_value = mock_client
@@ -104,12 +104,12 @@ class TestClaudeEngine:
         mod._AuthenticationError = auth_err
 
         with pytest.raises(ApiKeyError, match="Invalid Anthropic API key"):
-            self.engine.recognize(b"fake_image", OcrOptions())
+            await self.engine.recognize(b"fake_image", OcrOptions())
 
         mod._AuthenticationError = original
 
     @patch("sidecar.ocr_engines.claude_engine.anthropic")
-    def test_recognize_rate_limit_error(self, mock_anthropic):
+    async def test_recognize_rate_limit_error(self, mock_anthropic):
         """Anthropic RateLimitError is mapped to ocr RateLimitError."""
         mock_client = MagicMock()
         mock_anthropic.Anthropic.return_value = mock_client
@@ -123,12 +123,12 @@ class TestClaudeEngine:
         mod._RateLimitError = rate_err
 
         with pytest.raises(RateLimitError, match="Claude rate limit"):
-            self.engine.recognize(b"fake_image", OcrOptions())
+            await self.engine.recognize(b"fake_image", OcrOptions())
 
         mod._RateLimitError = original
 
     @patch("sidecar.ocr_engines.claude_engine.anthropic")
-    def test_recognize_connection_error(self, mock_anthropic):
+    async def test_recognize_connection_error(self, mock_anthropic):
         """Anthropic APIConnectionError is mapped to NetworkError."""
         mock_client = MagicMock()
         mock_anthropic.Anthropic.return_value = mock_client
@@ -142,17 +142,17 @@ class TestClaudeEngine:
         mod._APIConnectionError = conn_err
 
         with pytest.raises(NetworkError, match="Failed to connect to Claude"):
-            self.engine.recognize(b"fake_image", OcrOptions())
+            await self.engine.recognize(b"fake_image", OcrOptions())
 
         mod._APIConnectionError = original
 
     # -- missing API key at call time ---------------------------------------
 
-    def test_recognize_no_key_raises(self):
+    async def test_recognize_no_key_raises(self):
         """Recognize with empty key raises ApiKeyError immediately."""
         engine = ClaudeEngine(api_key="")
         with pytest.raises(ApiKeyError, match="not configured"):
-            engine.recognize(b"img", OcrOptions())
+            await engine.recognize(b"img", OcrOptions())
 
     # -- cost estimation ----------------------------------------------------
 
@@ -185,7 +185,7 @@ class TestClaudeEngine:
 
     # -- provider not installed ---------------------------------------------
 
-    def test_recognize_package_not_installed(self):
+    async def test_recognize_package_not_installed(self):
         """When anthropic is missing, recognize raises ApiKeyError."""
         import sidecar.ocr_engines.claude_engine as mod
         orig_avail = mod.ANTHROPIC_AVAILABLE
@@ -194,7 +194,7 @@ class TestClaudeEngine:
         mod.anthropic = None  # type: ignore[assignment]
 
         with pytest.raises(ApiKeyError, match="not installed"):
-            self.engine.recognize(b"img", OcrOptions())
+            await self.engine.recognize(b"img", OcrOptions())
 
         mod.ANTHROPIC_AVAILABLE = orig_avail
         mod.anthropic = orig_mod

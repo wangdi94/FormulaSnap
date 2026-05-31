@@ -38,6 +38,7 @@ export async function copyToClipboard(text: string, format: CopyFormat): Promise
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // 尝试通过 Canvas 导出为 PNG
+      let objectUrl: string | undefined;
       try {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
@@ -46,6 +47,7 @@ export async function copyToClipboard(text: string, format: CopyFormat): Promise
           const svgData = new XMLSerializer().serializeToString(mathField);
           const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
           const url = URL.createObjectURL(svgBlob);
+          objectUrl = url;
 
           const img = new Image();
           await new Promise<void>((resolve, reject) => {
@@ -54,6 +56,7 @@ export async function copyToClipboard(text: string, format: CopyFormat): Promise
               canvas.height = img.height;
               ctx.drawImage(img, 0, 0);
               URL.revokeObjectURL(url);
+              objectUrl = undefined;
               resolve();
             };
             img.onerror = reject;
@@ -73,6 +76,10 @@ export async function copyToClipboard(text: string, format: CopyFormat): Promise
         }
       } catch {
         // 如果 PNG 导出失败，回退到复制 LaTeX 文本
+      } finally {
+        if (objectUrl) {
+          URL.revokeObjectURL(objectUrl);
+        }
       }
 
       document.body.removeChild(container);

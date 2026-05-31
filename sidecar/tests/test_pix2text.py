@@ -20,7 +20,7 @@ class TestPix2TextEngine:
 
     @patch("sidecar.ocr_engines.pix2text_engine.Pix2Text")
     @patch("PIL.Image.open")
-    def test_recognize_calls_pix2text(self, mock_image_open, mock_p2t_class):
+    async def test_recognize_calls_pix2text(self, mock_image_open, mock_p2t_class):
         """Test that recognize() calls Pix2Text API and extracts best formula."""
         mock_p2t = MagicMock()
         mock_p2t.recognize_page.return_value = [
@@ -30,7 +30,7 @@ class TestPix2TextEngine:
         mock_image_open.return_value = MagicMock()
 
         engine = Pix2TextEngine()
-        result = engine.recognize(b"fake_image", OcrOptions())
+        result = await engine.recognize(b"fake_image", OcrOptions())
 
         assert isinstance(result, OcrResult)
         assert "x^2" in result.latex
@@ -40,7 +40,7 @@ class TestPix2TextEngine:
 
     @patch("sidecar.ocr_engines.pix2text_engine.Pix2Text")
     @patch("PIL.Image.open")
-    def test_recognize_returns_highest_confidence_formula(self, mock_image_open, mock_p2t_class):
+    async def test_recognize_returns_highest_confidence_formula(self, mock_image_open, mock_p2t_class):
         """When multiple formulas are found, return the one with highest confidence."""
         mock_p2t = MagicMock()
         mock_p2t.recognize_page.return_value = [
@@ -52,14 +52,14 @@ class TestPix2TextEngine:
         mock_image_open.return_value = MagicMock()
 
         engine = Pix2TextEngine()
-        result = engine.recognize(b"fake_image", OcrOptions())
+        result = await engine.recognize(b"fake_image", OcrOptions())
 
         assert result.latex == "$b=2$"
         assert result.confidence == 0.95
 
     @patch("sidecar.ocr_engines.pix2text_engine.Pix2Text")
     @patch("PIL.Image.open")
-    def test_recognize_handles_no_formula(self, mock_image_open, mock_p2t_class):
+    async def test_recognize_handles_no_formula(self, mock_image_open, mock_p2t_class):
         """Test handling when no formula is found — fall back to text content."""
         mock_p2t = MagicMock()
         mock_p2t.recognize_page.return_value = [
@@ -69,7 +69,7 @@ class TestPix2TextEngine:
         mock_image_open.return_value = MagicMock()
 
         engine = Pix2TextEngine()
-        result = engine.recognize(b"fake_image", OcrOptions())
+        result = await engine.recognize(b"fake_image", OcrOptions())
 
         assert result.latex is not None
         assert "Hello world" in result.latex
@@ -77,7 +77,7 @@ class TestPix2TextEngine:
 
     @patch("sidecar.ocr_engines.pix2text_engine.Pix2Text")
     @patch("PIL.Image.open")
-    def test_recognize_handles_empty_result(self, mock_image_open, mock_p2t_class):
+    async def test_recognize_handles_empty_result(self, mock_image_open, mock_p2t_class):
         """Test handling when Pix2Text returns empty result list."""
         mock_p2t = MagicMock()
         mock_p2t.recognize_page.return_value = []
@@ -85,7 +85,7 @@ class TestPix2TextEngine:
         mock_image_open.return_value = MagicMock()
 
         engine = Pix2TextEngine()
-        result = engine.recognize(b"fake_image", OcrOptions())
+        result = await engine.recognize(b"fake_image", OcrOptions())
 
         assert result.latex == ""
         assert result.confidence == 0.0

@@ -1,18 +1,11 @@
 import { useMemo } from "react";
 import type { OcrBackend } from "../types";
+import { BACKEND_LABELS } from "../lib/constants";
 
 interface BackendIndicatorProps {
   backend: OcrBackend;
   fallback?: boolean;
 }
-
-const BACKEND_LABELS: Record<OcrBackend, string> = {
-  pix2text: "Pix2Text (本地)",
-  mathpix: "Mathpix",
-  openai: "OpenAI",
-  claude: "Claude",
-  gemini: "Gemini",
-};
 
 const BACKEND_COLORS: Record<OcrBackend, string> = {
   pix2text: "bg-green-500",

@@ -9,8 +9,8 @@ struct FileLogger {
 }
 
 impl Log for FileLogger {
-    fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= Level::Info
+    fn enabled(&self, _metadata: &Metadata) -> bool {
+        true
     }
 
     fn log(&self, record: &Record) {
@@ -36,14 +36,18 @@ impl Log for FileLogger {
         );
 
         if let Ok(mut file) = self.file.lock() {
-            let _ = file.write_all(message.as_bytes());
+            if file.write_all(message.as_bytes()).is_err() {
+                eprint!("{}", message);
+            }
             let _ = file.flush();
         }
     }
 
     fn flush(&self) {
         if let Ok(mut file) = self.file.lock() {
-            let _ = file.flush();
+            if file.flush().is_err() {
+                eprintln!("flush log failed");
+            }
         }
     }
 }
@@ -65,7 +69,20 @@ pub fn init_logger(app_data_dir: &Path) -> Result<(), Box<dyn std::error::Error>
     };
 
     log::set_boxed_logger(Box::new(logger))?;
-    log::set_max_level(LevelFilter::Info);
+
+    let level_filter = match std::env::var("FORMULASNAP_LOG_LEVEL")
+        .unwrap_or_default()
+        .to_lowercase()
+        .as_str()
+    {
+        "error" => LevelFilter::Error,
+        "warn" | "warning" => LevelFilter::Warn,
+        "info" => LevelFilter::Info,
+        "debug" => LevelFilter::Debug,
+        "trace" => LevelFilter::Trace,
+        _ => LevelFilter::Info,
+    };
+    log::set_max_level(level_filter);
 
     Ok(())
 }

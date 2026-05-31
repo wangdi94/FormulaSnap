@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_shell::process::CommandChild;
+use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
 /// Sidecar HTTP 端口（与 Python sidecar 的 uvicorn 配置一致）
@@ -13,41 +13,77 @@ const HEALTH_TIMEOUT: Duration = Duration::from_secs(30);
 /// 健康检查轮询间隔
 const HEALTH_INTERVAL: Duration = Duration::from_millis(500);
 
-/// 存储 sidecar 子进程句柄
-pub struct SidecarProcess(pub Mutex<Option<CommandChild>>);
+/// 存储 sidecar 子进程句柄和健康检查线程句柄
+pub struct SidecarProcess {
+    child: Mutex<Option<CommandChild>>,
+    health_handle: Mutex<Option<std::thread::JoinHandle<()>>>,
+}
 
 /// 启动 Python sidecar 子进程，并在后台线程中轮询健康检查。
 pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
-    // 创建 sidecar 命令（对应 bundle.externalBin 配置）
     let sidecar_command = app
         .shell()
         .sidecar("formulasnap-sidecar")
         .map_err(|e| format!("创建 sidecar 命令失败: {}", e))?;
 
-    // 启动子进程
-    let (mut _rx, child) = sidecar_command
+    let (rx, child) = sidecar_command
         .spawn()
         .map_err(|e| format!("启动 sidecar 进程失败: {}", e))?;
 
-    // 保存子进程句柄到 Tauri 状态
-    app.manage(SidecarProcess(Mutex::new(Some(child))));
+    app.manage(SidecarProcess {
+        child: Mutex::new(Some(child)),
+        health_handle: Mutex::new(None),
+    });
 
-    // 在后台线程中轮询健康检查，就绪后发送事件
+    tauri::async_runtime::spawn(async move {
+        let mut rx = rx;
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(data) => {
+                    if let Ok(text) = String::from_utf8(data) {
+                        log::info!("[sidecar] {}", text.trim_end());
+                    }
+                }
+                CommandEvent::Stderr(data) => {
+                    if let Ok(text) = String::from_utf8(data) {
+                        log::warn!("[sidecar] {}", text.trim_end());
+                    }
+                }
+                CommandEvent::Terminated(payload) => {
+                    log::info!("[sidecar] 进程退出，状态码: {:?}", payload.code);
+                    break;
+                }
+                CommandEvent::Error(err) => {
+                    log::error!("[sidecar] {}", err);
+                }
+                _ => {}
+            }
+        }
+    });
+
     let app_handle = app.clone();
-    std::thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         let url = format!("http://localhost:{}/health", SIDECAR_PORT);
 
         match poll_health(&url, HEALTH_TIMEOUT, HEALTH_INTERVAL) {
             Ok(()) => {
                 log::info!("Python sidecar 已就绪 (port {})", SIDECAR_PORT);
-                let _ = app_handle.emit("sidecar://ready", ());
+                if let Err(e) = app_handle.emit("sidecar://ready", ()) {
+                    log::warn!("发送 sidecar://ready 事件失败: {}", e);
+                }
             }
             Err(e) => {
                 log::error!("健康检查失败: {}", e);
-                let _ = app_handle.emit("sidecar://error", e);
+                if let Err(e) = app_handle.emit("sidecar://error", e) {
+                    log::warn!("发送 sidecar://error 事件失败: {}", e);
+                }
             }
         }
     });
+
+    if let Ok(mut guard) = app.state::<SidecarProcess>().health_handle.lock() {
+        *guard = Some(handle);
+    }
 
     Ok(())
 }
@@ -83,7 +119,7 @@ fn poll_health(url: &str, timeout: Duration, interval: Duration) -> Result<(), S
 /// 优雅关闭 sidecar 进程：先尝试 kill，然后清理状态。
 pub fn stop_sidecar(app: &AppHandle) {
     let state = app.state::<SidecarProcess>();
-    let mut guard = match state.0.lock() {
+    let mut guard = match state.child.lock() {
         Ok(guard) => guard,
         Err(poisoned) => {
             log::error!("SidecarProcess mutex 已中毒，使用内部锁继续");
@@ -97,7 +133,19 @@ pub fn stop_sidecar(app: &AppHandle) {
         if let Err(e) = child.kill() {
             log::error!("关闭 sidecar 失败: {}", e);
         } else {
+            // 等待进程退出，避免残留进程
+            std::thread::sleep(Duration::from_millis(200));
             log::info!("Python sidecar 已关闭");
+        }
+    }
+
+    if let Ok(mut handle_guard) = state.health_handle.lock() {
+        if let Some(handle) = handle_guard.take() {
+            if handle.is_finished() {
+                if let Err(e) = handle.join() {
+                    log::error!("健康检查线程 panic: {:?}", e);
+                }
+            }
         }
     }
 }

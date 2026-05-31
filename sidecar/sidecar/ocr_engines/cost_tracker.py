@@ -203,6 +203,77 @@ class CostTracker:
         )
         return record
 
+    def check_and_record(
+        self,
+        backend: str,
+        tokens_used: int,
+        cost_usd: float,
+    ) -> CallRecord:
+        """Atomically check rate limits and record a call.
+
+        Combines check_rate_limit() and record_call() into a single
+        atomic operation under the lock, eliminating TOCTOU race conditions
+        where concurrent requests could both pass the rate limit check
+        before either records their call.
+
+        Args:
+            backend: Name of the OCR backend.
+            tokens_used: Number of tokens consumed.
+            cost_usd: Cost in US dollars.
+
+        Returns:
+            The created CallRecord.
+
+        Raises:
+            RateLimitExceeded: If rate limits would be exceeded.
+        """
+        now = self._time()
+
+        with self._lock:
+            # Check minimum interval
+            if self._last_call_time > 0:
+                elapsed = now - self._last_call_time
+                if elapsed < self._min_interval:
+                    retry_after = self._min_interval - elapsed
+                    logger.warning(
+                        "Rate limit: minimum interval not elapsed (%.1fs < %.1fs)",
+                        elapsed, self._min_interval,
+                    )
+                    raise RateLimitExceeded(
+                        f"Minimum interval not elapsed. "
+                        f"Retry after {retry_after:.1f}s",
+                        retry_after=retry_after,
+                    )
+
+            # Check daily limit
+            calls_today = self._count_calls_today(now)
+            if calls_today >= self._daily_limit:
+                seconds_until_midnight = self._seconds_until_utc_midnight(now)
+                logger.warning(
+                    "Rate limit: daily limit of %d calls reached",
+                    self._daily_limit,
+                )
+                raise RateLimitExceeded(
+                    f"Daily limit of {self._daily_limit} calls reached. "
+                    f"Resets in {seconds_until_midnight:.0f}s",
+                    retry_after=seconds_until_midnight,
+                )
+
+            record = CallRecord(
+                backend=backend,
+                tokens_used=tokens_used,
+                cost_usd=cost_usd,
+                timestamp=now,
+            )
+            self._records.append(record)
+            self._last_call_time = now
+
+        logger.debug(
+            "Recorded call: backend=%s tokens=%d cost=$%.6f",
+            backend, tokens_used, cost_usd,
+        )
+        return record
+
     # ------------------------------------------------------------------
     # Statistics
     # ------------------------------------------------------------------

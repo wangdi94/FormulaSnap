@@ -80,8 +80,12 @@ pub fn delete(conn: &Connection, id: i64) -> Result<bool, rusqlite::Error> {
 }
 
 pub fn search(conn: &Connection, query: &str) -> Result<Vec<HistoryEntry>, rusqlite::Error> {
-    // Escape FTS5 special characters by wrapping in double quotes for phrase search
-    let escaped_query = format!("\"{}\"", query.replace('"', "\"\""));
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+    // FTS5 phrase query: all chars literal except `"` (doubled here)
+    let escaped_query = format!("\"{}\"", trimmed.replace('"', "\"\""));
     let mut stmt = conn.prepare(
         "SELECT h.id, h.created_at, h.latex, h.backend, h.confidence, h.screenshot_path, h.mathml
          FROM history h
@@ -188,5 +192,28 @@ mod tests {
 
         let results = search(&conn, "nonexistent").unwrap();
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_search_empty_query() {
+        let conn = setup_db();
+        insert(&conn, "x^2", "test", 0.9, None).unwrap();
+
+        assert!(search(&conn, "").unwrap().is_empty());
+        assert!(search(&conn, "   ").unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_search_special_chars() {
+        let conn = setup_db();
+        insert(&conn, "x^2 + y^2", "test", 0.9, None).unwrap();
+        insert(&conn, "a*b", "test", 0.9, None).unwrap();
+        insert(&conn, "c:d", "test", 0.9, None).unwrap();
+        insert(&conn, "e{f}g", "test", 0.9, None).unwrap();
+
+        assert_eq!(search(&conn, "x^2").unwrap().len(), 1);
+        assert_eq!(search(&conn, "a*b").unwrap().len(), 1);
+        assert_eq!(search(&conn, "c:d").unwrap().len(), 1);
+        assert_eq!(search(&conn, "e{f}g").unwrap().len(), 1);
     }
 }

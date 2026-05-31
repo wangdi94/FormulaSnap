@@ -195,6 +195,92 @@ class TestRateLimiting:
 
 
 # =========================================================================
+# Atomic check_and_record Tests
+# =========================================================================
+
+
+class TestCheckAndRecord:
+    """Tests for the atomic check_and_record() method."""
+
+    def test_check_and_record_success(self):
+        """check_and_record atomically checks and records a call."""
+        tracker = CostTracker(daily_limit=100, min_interval_secs=2.0, time_fn=lambda: 1000.0)
+
+        record = tracker.check_and_record("openai", tokens_used=765, cost_usd=0.005)
+
+        assert record.backend == "openai"
+        assert record.tokens_used == 765
+        assert record.cost_usd == 0.005
+        assert tracker.get_stats().total_calls == 1
+
+    def test_check_and_record_fails_within_min_interval(self):
+        """check_and_record raises RateLimitExceeded within min interval."""
+        current_time = 1000.0
+        tracker = CostTracker(daily_limit=100, min_interval_secs=2.0, time_fn=lambda: current_time)
+
+        tracker.record_call("openai", tokens_used=100, cost_usd=0.001)
+        current_time = 1001.0
+
+        with pytest.raises(RateLimitExceeded) as exc_info:
+            tracker.check_and_record("openai", tokens_used=100, cost_usd=0.001)
+
+        assert exc_info.value.retry_after is not None
+        assert exc_info.value.retry_after > 0
+        assert tracker.get_stats().total_calls == 1
+
+    def test_check_and_record_fails_at_daily_limit(self):
+        """check_and_record raises RateLimitExceeded at daily limit."""
+        current_time = 1000.0
+        tracker = CostTracker(daily_limit=2, min_interval_secs=0.0, time_fn=lambda: current_time)
+
+        tracker.check_and_record("openai", tokens_used=100, cost_usd=0.001)
+        current_time += 0.01
+        tracker.check_and_record("openai", tokens_used=100, cost_usd=0.001)
+        current_time += 0.01
+
+        with pytest.raises(RateLimitExceeded) as exc_info:
+            tracker.check_and_record("openai", tokens_used=100, cost_usd=0.001)
+
+        assert "Daily limit" in str(exc_info.value)
+        assert tracker.get_stats().total_calls == 2
+
+    def test_check_and_record_atomic_under_contention(self):
+        """check_and_record is atomic even under thread contention."""
+        import threading
+
+        current_time = 1000.0
+        time_lock = threading.Lock()
+
+        def time_fn():
+            with time_lock:
+                return current_time
+
+        tracker = CostTracker(daily_limit=5, min_interval_secs=0.0, time_fn=time_fn)
+
+        results = {"success": 0, "limited": 0}
+        barrier = threading.Barrier(10)
+
+        def worker():
+            nonlocal current_time
+            barrier.wait()
+            try:
+                tracker.check_and_record("openai", tokens_used=100, cost_usd=0.001)
+                results["success"] += 1
+            except RateLimitExceeded:
+                results["limited"] += 1
+
+        threads = [threading.Thread(target=worker) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert results["success"] == 5
+        assert results["limited"] == 5
+        assert tracker.get_stats().total_calls == 5
+
+
+# =========================================================================
 # KeyManager Tests
 # =========================================================================
 

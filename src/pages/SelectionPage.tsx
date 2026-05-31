@@ -23,6 +23,16 @@ export default function SelectionPage() {
       });
   }, []);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        getCurrentWindow().close();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const handleSelected = useCallback(
     (rect: SelectionRect) => {
       emit("selection-result", rect);
@@ -35,7 +45,21 @@ export default function SelectionPage() {
     getCurrentWindow().close();
   }, []);
 
-  if (!screenshot) return null;
+  if (!screenshot) {
+    return (
+      <canvas
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          display: "block",
+          background: "transparent",
+        }}
+      />
+    );
+  }
 
   return (
     <RegionSelector

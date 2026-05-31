@@ -47,7 +47,7 @@ class ClaudeEngine(LlmProvider):
     def __init__(self, api_key: Optional[str] = None):
         self._api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
 
-    def recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
+    async def recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
         """Recognize math in image via Claude Sonnet Vision."""
         if not self._api_key:
             raise ApiKeyError("Anthropic API key not configured")
@@ -107,7 +107,7 @@ class ClaudeEngine(LlmProvider):
 
         return OcrResult(
             latex=latex,
-            confidence=0.9,  # LLM doesn't provide confidence
+            confidence=None,  # LLM doesn't provide confidence
             backend="claude",
             timing_ms=timing_ms,
             cost_estimate=CostEstimate(

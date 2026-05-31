@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { callOcr, type OcrResponse, SidecarError } from "../lib/sidecarClient";
+import { callOcr, type OcrResponse, type OcrBackend, SidecarError } from "../lib/sidecarClient";
+import { loadSettings } from "../lib/settings";
+import { BACKEND_LABELS } from "../lib/constants";
 import FormulaPreview from "./FormulaPreview";
 
 type FlowState = "idle" | "selecting" | "capturing" | "ocr-loading" | "result" | "error";
@@ -12,13 +14,7 @@ interface FlowError {
   retryable: boolean;
 }
 
-const BACKEND_LABELS: Record<string, string> = {
-  pix2text: "Pix2Text (本地)",
-  mathpix: "Mathpix",
-  openai: "OpenAI",
-  claude: "Claude",
-  gemini: "Gemini",
-};
+const SELECTING_TIMEOUT_MS = 15_000;
 
 function mapSidecarError(err: unknown): FlowError {
   if (err instanceof SidecarError) {
@@ -49,8 +45,14 @@ export default function CaptureFlow() {
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [result, setResult] = useState<OcrResponse | null>(null);
   const [error, setError] = useState<FlowError | null>(null);
-  const [backend] = useState<string>("pix2text");
+  const [backend, setBackend] = useState<OcrBackend | 'auto'>("pix2text");
   const ocrAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    loadSettings()
+      .then((s) => setBackend(s.default_backend))
+      .catch((e) => console.warn("Failed to load backend setting:", e));
+  }, []);
 
   const runOcr = useCallback(
     async (base64: string) => {
@@ -113,6 +115,15 @@ export default function CaptureFlow() {
     };
   }, [runOcr]);
 
+  useEffect(() => {
+    const unlisten = listen("selection-cancelled", () => {
+      setState("idle");
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
   const handleRetry = useCallback(() => {
     if (imageBase64) {
       runOcr(imageBase64);
@@ -132,6 +143,15 @@ export default function CaptureFlow() {
       ocrAbortRef.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (state !== "selecting") return;
+    const timer = setTimeout(() => {
+      setState("idle");
+      setError({ message: "区域选择超时，请重试", code: "SELECTION_TIMEOUT", retryable: false });
+    }, SELECTING_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [state]);
 
   return (
     <div className="flex flex-col items-center w-full max-w-2xl mx-auto space-y-6">
@@ -175,7 +195,7 @@ export default function CaptureFlow() {
       )}
 
       {state === "ocr-loading" && (
-        <div className="flex flex-col items-center space-y-4 py-12">
+        <div className="flex flex-col items-center space-y-4 py-12" role="status" aria-live="polite">
           <svg
             className="animate-spin h-8 w-8 text-blue-500"
             xmlns="http://www.w3.org/2000/svg"

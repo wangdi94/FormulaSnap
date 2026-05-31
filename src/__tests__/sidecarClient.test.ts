@@ -133,7 +133,7 @@ describe('OcrResponse 接口', () => {
     const res1: OcrResponse = {
       latex: '',
       confidence: 0,
-      backend: '',
+      backend: 'pix2text',
       timing_ms: 0,
     };
     expect(res1.cost_estimate).toBeUndefined();
@@ -141,7 +141,7 @@ describe('OcrResponse 接口', () => {
     const res2: OcrResponse = {
       latex: '',
       confidence: 0,
-      backend: '',
+      backend: 'pix2text',
       timing_ms: 0,
       cost_estimate: {
         tokens_used: 1000,
@@ -156,7 +156,7 @@ describe('OcrResponse 接口', () => {
     const res: OcrResponse = {
       latex: '',
       confidence: 0,
-      backend: '',
+      backend: 'pix2text',
       timing_ms: 0,
       cost_estimate: {},
     };

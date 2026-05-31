@@ -47,7 +47,7 @@ class OpenAIEngine(LlmProvider):
     def __init__(self, api_key: Optional[str] = None):
         self._api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
 
-    def recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
+    async def recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
         """Recognize math in image via GPT-4o Vision."""
         if not self._api_key:
             raise ApiKeyError("OpenAI API key not configured")
@@ -102,7 +102,7 @@ class OpenAIEngine(LlmProvider):
 
         return OcrResult(
             latex=latex,
-            confidence=0.9,  # LLM doesn't provide confidence
+            confidence=None,  # LLM doesn't provide confidence
             backend="openai",
             timing_ms=timing_ms,
             cost_estimate=CostEstimate(

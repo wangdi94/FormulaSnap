@@ -1,5 +1,4 @@
 import { useRef, useEffect, useCallback } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 
 interface SelectionRect {
   x: number;
@@ -145,15 +144,9 @@ export default function RegionSelector({
   }, [getSelectionBox, onSelected]);
 
   useEffect(() => {
-    const win = getCurrentWindow();
-    const unlisten = win.onCloseRequested((e) => {
-      e.preventDefault();
-      onCancel();
-    });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [onCancel]);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, [handleMouseUp]);
 
   return (
     <canvas

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 import base64
+import binascii
 import logging
 import time
 
@@ -38,7 +39,7 @@ class OcrRequest(BaseModel):
 
 class OcrResponse(BaseModel):
     latex: str
-    confidence: float
+    confidence: Optional[float] = None
     backend: str
     timing_ms: int
     cost_estimate: Optional[dict] = None
@@ -62,7 +63,6 @@ class StatsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 _engines: dict[str, OcrBackend] = {}
-_stats: dict = {"total_calls": 0, "total_tokens": 0, "estimated_cost_usd": 0.0}
 
 
 def get_engine(backend: str) -> OcrBackend:
@@ -96,7 +96,7 @@ async def ocr_endpoint(request: OcrRequest):
 
         tokens = result.cost_estimate.tokens_used if result.cost_estimate else 0
         cost = result.cost_estimate.estimated_cost_usd if result.cost_estimate else 0.0
-        cost_tracker.record_call(
+        cost_tracker.check_and_record(
             backend=result.backend,
             tokens_used=tokens,
             cost_usd=cost,
@@ -137,6 +137,11 @@ async def ocr_endpoint(request: OcrRequest):
         raise HTTPException(
             status_code=500,
             detail={"error": "OCR_ERROR", "message": str(e)},
+        )
+    except binascii.Error as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "INVALID_IMAGE", "message": f"Invalid base64 image: {e}"},
         )
 
 

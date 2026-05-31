@@ -72,7 +72,7 @@ class Pix2TextEngine:
     # OcrBackend Protocol methods
     # ------------------------------------------------------------------
 
-    def recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
+    async def recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
         """Recognize mathematical content in *image* bytes.
 
         Returns the highest-confidence formula block, or the concatenated
@@ -93,10 +93,9 @@ class Pix2TextEngine:
         # Convert raw bytes → PIL Image
         from PIL import Image
 
-        img = Image.open(io.BytesIO(image))
-
-        # Run recognition
-        results = self._p2t.recognize_page(img)
+        with Image.open(io.BytesIO(image)) as img:
+            # Run recognition
+            results = self._p2t.recognize_page(img)
 
         # Prefer formulas; fall back to plain text
         formulas = [r for r in results if r.get("type") == "formula"]

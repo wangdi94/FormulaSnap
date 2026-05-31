@@ -3,15 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import type { HistoryEntry } from "../types/history";
 import { copyToClipboard, type CopyFormat } from "../lib/clipboard";
+import { BACKEND_LABELS } from "../lib/constants";
 import FormulaPreview from "../components/FormulaPreview";
-
-const BACKEND_LABELS: Record<string, string> = {
-  pix2text: "Pix2Text (本地)",
-  mathpix: "Mathpix",
-  openai: "OpenAI GPT-4o",
-  claude: "Claude",
-  gemini: "Gemini",
-};
 
 type CopyState = null | "copying" | "copied" | "error";
 
@@ -98,7 +91,7 @@ export default function HistoryDetailPage() {
   /* ── 加载中 ── */
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-full" role="status" aria-live="polite">
         <div className="flex items-center gap-3 text-gray-400 dark:text-gray-500">
           <svg
             className="animate-spin h-5 w-5"

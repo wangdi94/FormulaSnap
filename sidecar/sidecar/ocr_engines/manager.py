@@ -60,9 +60,13 @@ class CircuitBreaker:
         self._opened_at: float = 0.0
         self._lock = threading.Lock()
 
-    @property
-    def state(self) -> _CircuitState:
-        """Current state, auto-transitioning OPEN → HALF_OPEN after timeout."""
+    def get_state(self) -> _CircuitState:
+        """Current state, auto-transitioning OPEN → HALF_OPEN after timeout.
+
+        Returns the current circuit breaker state. If the breaker is OPEN
+        and the recovery timeout has elapsed, transitions to HALF_OPEN
+        before returning.
+        """
         with self._lock:
             if (
                 self._state == _CircuitState.OPEN
@@ -79,7 +83,7 @@ class CircuitBreaker:
 
     def allow_request(self) -> bool:
         """Check whether a request is allowed through the breaker."""
-        state = self.state  # triggers auto-transition
+        state = self.get_state()  # triggers auto-transition
         if state == _CircuitState.CLOSED:
             return True
         if state == _CircuitState.HALF_OPEN:
@@ -173,7 +177,7 @@ class EngineManager:
     # Public API
     # ------------------------------------------------------------------
 
-    def recognize(
+    async def recognize(
         self,
         image: bytes,
         backend: str = "auto",
@@ -199,10 +203,10 @@ class EngineManager:
             options = OcrOptions()
 
         if backend != "auto":
-            return self._call_engine(backend, image, options)
+            return await self._call_engine(backend, image, options)
 
         # Auto mode: cost-aware routing + fallback chain
-        return self._auto_recognize(image, options)
+        return await self._auto_recognize(image, options)
 
     def estimate_all(self, image: bytes) -> Dict[str, Optional[CostEstimate]]:
         """Estimate cost for every registered engine.
@@ -231,7 +235,7 @@ class EngineManager:
     # Internal routing
     # ------------------------------------------------------------------
 
-    def _call_engine(
+    async def _call_engine(
         self, name: str, image: bytes, options: OcrOptions
     ) -> OcrResult:
         """Call a specific engine, respecting its circuit breaker."""
@@ -249,7 +253,7 @@ class EngineManager:
 
         logger.debug("Calling engine '%s'", name)
         try:
-            result = self._engines[name].recognize(image, options)
+            result = await self._engines[name].recognize(image, options)
             breaker.record_success()
             logger.debug("Engine '%s' succeeded", name)
             return result
@@ -260,7 +264,7 @@ class EngineManager:
             )
             raise
 
-    def _auto_recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
+    async def _auto_recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
         """Auto-route: pick cheapest available, fallback on failure.
 
         Strategy:
@@ -284,7 +288,7 @@ class EngineManager:
                 continue
 
             try:
-                result = self._engines[name].recognize(image, options)
+                result = await self._engines[name].recognize(image, options)
                 breaker.record_success()
                 logger.info("Auto route succeeded with engine '%s'", name)
                 return result

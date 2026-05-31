@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AppSettings } from '../types/settings';
-import { loadSettings, saveSettings } from '../lib/settings';
+import { loadSettings, saveSettings, resetSettings } from '../lib/settings';
 import { getStats, type StatsResponse } from '../lib/sidecarClient';
+import { setLang } from '../lib/i18n';
 
 /* ─── 后端选项 ─── */
 const BACKENDS = [
@@ -103,7 +104,10 @@ export default function SettingsPage() {
   /* ── 独立加载设置 ── */
   useEffect(() => {
     loadSettings()
-      .then((s) => setSettings(s))
+      .then((s) => {
+        setSettings(s);
+        setLang(s.language);
+      })
       .catch((e) => {
         console.warn('Failed to load settings, using defaults:', e);
         setSettings({
@@ -182,7 +186,7 @@ export default function SettingsPage() {
   /* ── 加载中 ── */
   if (loading || !settings) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-full" role="status" aria-live="polite">
         <div className="flex items-center gap-3 text-gray-400 dark:text-gray-500">
           <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <title>加载中</title>
@@ -339,7 +343,7 @@ export default function SettingsPage() {
             </button>
           </div>
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            默认：{navigator.platform.includes('Mac') ? 'Cmd+Shift+C' : 'Ctrl+Shift+C'}。需包含至少一个修饰键（Ctrl/Alt/Shift/Super）。
+            默认：{navigator.userAgent.includes('Mac') ? 'Cmd+Shift+C' : 'Ctrl+Shift+C'}。需包含至少一个修饰键（Ctrl/Alt/Shift/Super）。
           </p>
         </div>
       </Section>
@@ -440,7 +444,7 @@ export default function SettingsPage() {
               type="button"
               onClick={async () => {
                 if (window.confirm('确定要重置所有设置为默认值吗？')) {
-                  const defaults = await (await import('../lib/settings')).resetSettings();
+                  const defaults = await resetSettings();
                   setSettings(defaults);
                   setSaveMsg('已重置为默认设置');
                   setTimeout(() => setSaveMsg(null), 2500);

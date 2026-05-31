@@ -38,18 +38,23 @@ export type ProgressCallback = (event: ProgressEvent) => void;
  * @returns 更新信息，如果没有更新则返回 null
  */
 export async function checkForUpdates(): Promise<UpdateInfo | null> {
-  const update = await check();
+  try {
+    const update = await check();
 
-  if (!update) {
+    if (!update) {
+      return null;
+    }
+
+    return {
+      version: update.version,
+      date: update.date,
+      body: update.body,
+      currentVersion: update.currentVersion,
+    };
+  } catch (err) {
+    console.warn('Failed to check for updates:', err);
     return null;
   }
-
-  return {
-    version: update.version,
-    date: update.date,
-    body: update.body,
-    currentVersion: update.currentVersion,
-  };
 }
 
 /**

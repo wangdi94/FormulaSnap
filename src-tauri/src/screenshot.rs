@@ -1,13 +1,20 @@
 use image::DynamicImage;
 use xcap::Monitor;
 
+fn get_primary_monitor() -> Result<Monitor, Box<dyn std::error::Error>> {
+    let monitors = Monitor::all()?;
+    let monitor = monitors
+        .into_iter()
+        .find(|m| m.is_primary().unwrap_or(false))
+        .or_else(|| Monitor::all().ok()?.into_iter().next())
+        .ok_or("No monitor found")?;
+    Ok(monitor)
+}
+
 /// Capture the entire primary monitor screen.
 /// Returns PNG-encoded bytes.
 pub fn capture_screen() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let monitor = Monitor::all()?
-        .into_iter()
-        .next()
-        .ok_or("No monitor found")?;
+    let monitor = get_primary_monitor()?;
 
     let image = monitor.capture_image()?;
     let dynamic = DynamicImage::ImageRgba8(image);
@@ -23,10 +30,7 @@ pub fn capture_region(
     width: u32,
     height: u32,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let monitor = Monitor::all()?
-        .into_iter()
-        .next()
-        .ok_or("No monitor found")?;
+    let monitor = get_primary_monitor()?;
 
     let full_image = monitor.capture_image()?;
 

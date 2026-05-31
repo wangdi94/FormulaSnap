@@ -44,12 +44,16 @@ fn open_selection_window(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::WebviewWindowBuilder;
 
     if let Some(existing) = app.get_webview_window("selection") {
-        let _ = existing.show();
-        let _ = existing.set_focus();
+        if let Err(e) = existing.show() {
+            log::warn!("显示选择窗口失败: {}", e);
+        }
+        if let Err(e) = existing.set_focus() {
+            log::warn!("聚焦选择窗口失败: {}", e);
+        }
         return Ok(());
     }
 
-    WebviewWindowBuilder::new(&app, "selection", tauri::WebviewUrl::App("/selection".into()))
+    let sel_win = WebviewWindowBuilder::new(&app, "selection", tauri::WebviewUrl::App("/selection".into()))
         .title("选择区域")
         .transparent(true)
         .decorations(false)
@@ -57,6 +61,16 @@ fn open_selection_window(app: tauri::AppHandle) -> Result<(), String> {
         .always_on_top(true)
         .build()
         .map_err(|e| e.to_string())?;
+
+    if let Some(main_win) = app.get_webview_window("main") {
+        sel_win.on_window_event(move |event| {
+            if let WindowEvent::Destroyed = event {
+                if let Err(e) = main_win.emit("selection-cancelled", ()) {
+                    log::warn!("发送 selection-cancelled 事件失败: {}", e);
+                }
+            }
+        });
+    }
 
     Ok(())
 }
@@ -191,7 +205,9 @@ pub fn run() {
                 main_window.on_window_event(move |event| {
                     if let WindowEvent::CloseRequested { api, .. } = event {
                         api.prevent_close();
-                        let _ = win.hide();
+                        if let Err(e) = win.hide() {
+                            log::warn!("隐藏主窗口失败: {}", e);
+                        }
                     }
                 });
             }
