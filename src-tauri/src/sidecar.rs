@@ -81,9 +81,14 @@ pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
         }
     });
 
-    if let Ok(mut guard) = app.state::<SidecarProcess>().health_handle.lock() {
-        *guard = Some(handle);
-    }
+    let mut guard = match app.state::<SidecarProcess>().health_handle.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            log::error!("SidecarProcess health_handle mutex 已中毒，使用内部锁继续");
+            poisoned.into_inner()
+        }
+    };
+    *guard = Some(handle);
 
     Ok(())
 }
@@ -139,13 +144,16 @@ pub fn stop_sidecar(app: &AppHandle) {
         }
     }
 
-    if let Ok(mut handle_guard) = state.health_handle.lock() {
-        if let Some(handle) = handle_guard.take() {
-            if handle.is_finished() {
-                if let Err(e) = handle.join() {
-                    log::error!("健康检查线程 panic: {:?}", e);
-                }
-            }
+    let mut handle_guard = match state.health_handle.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            log::error!("SidecarProcess health_handle mutex 已中毒，使用内部锁继续");
+            poisoned.into_inner()
+        }
+    };
+    if let Some(handle) = handle_guard.take() {
+        if let Err(e) = handle.join() {
+            log::error!("健康检查线程 panic: {:?}", e);
         }
     }
 }
