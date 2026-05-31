@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 import base64
 import binascii
@@ -33,7 +33,7 @@ app.add_middleware(
 
 
 class OcrRequest(BaseModel):
-    image_base64: str
+    image_base64: str = Field(..., max_length=20_000_000)
     backend: str = "pix2text"
 
 
