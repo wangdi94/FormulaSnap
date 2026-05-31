@@ -1,4 +1,4 @@
-use log::{Level, LevelFilter, Log, Metadata, Record, SetLoggerError};
+use log::{Level, LevelFilter, Log, Metadata, Record};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::Path;
@@ -48,16 +48,17 @@ impl Log for FileLogger {
     }
 }
 
-pub fn init_logger(app_data_dir: &Path) -> Result<(), SetLoggerError> {
+pub fn init_logger(app_data_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let logs_dir = app_data_dir.join("logs");
-    std::fs::create_dir_all(&logs_dir).expect("failed to create logs directory");
+    std::fs::create_dir_all(&logs_dir)
+        .map_err(|e| format!("创建日志目录失败: {}", e))?;
 
     let log_path = logs_dir.join("formulasnap.log");
     let file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(&log_path)
-        .expect("failed to open log file");
+        .map_err(|e| format!("打开日志文件失败: {}", e))?;
 
     let logger = FileLogger {
         file: Mutex::new(file),

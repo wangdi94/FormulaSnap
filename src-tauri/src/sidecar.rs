@@ -83,7 +83,13 @@ fn poll_health(url: &str, timeout: Duration, interval: Duration) -> Result<(), S
 /// 优雅关闭 sidecar 进程：先尝试 kill，然后清理状态。
 pub fn stop_sidecar(app: &AppHandle) {
     let state = app.state::<SidecarProcess>();
-    let mut guard = state.0.lock().unwrap();
+    let mut guard = match state.0.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            log::error!("SidecarProcess mutex 已中毒，使用内部锁继续");
+            poisoned.into_inner()
+        }
+    };
 
     if let Some(child) = guard.take() {
         log::info!("正在关闭 Python sidecar...");

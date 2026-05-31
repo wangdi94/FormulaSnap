@@ -154,8 +154,9 @@ pub fn run() {
             let app_dir = app
                 .path()
                 .app_data_dir()
-                .expect("failed to get app data dir");
-            std::fs::create_dir_all(&app_dir).expect("failed to create app data dir");
+                .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
+            std::fs::create_dir_all(&app_dir)
+                .map_err(|e| format!("创建应用数据目录失败: {}", e))?;
 
             if let Err(e) = logger::init_logger(&app_dir) {
                 eprintln!("Failed to initialize logger: {}", e);
@@ -163,8 +164,10 @@ pub fn run() {
 
             let db_path = app_dir.join("app.db");
 
-            let conn = rusqlite::Connection::open(&db_path).expect("failed to open database");
-            db::initialize_database(&conn).expect("failed to initialize database");
+            let conn = rusqlite::Connection::open(&db_path)
+                .map_err(|e| format!("打开数据库失败: {}", e))?;
+            db::initialize_database(&conn)
+                .map_err(|e| format!("初始化数据库失败: {}", e))?;
 
             app.manage(DbConn(Mutex::new(conn)));
 
@@ -196,7 +199,10 @@ pub fn run() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while running tauri application")
+        .unwrap_or_else(|e| {
+            eprintln!("Tauri 应用构建失败: {}", e);
+            std::process::exit(1);
+        })
         .run(|app_handle, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 sidecar::stop_sidecar(app_handle);

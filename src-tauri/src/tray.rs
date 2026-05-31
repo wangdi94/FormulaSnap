@@ -39,8 +39,15 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         &[&screenshot_i, &history_i, &settings_i, &about_i, &quit_i],
     )?;
 
+    let icon = app.default_window_icon().cloned().ok_or_else(|| {
+        tauri::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "default window icon not configured in tauri.conf.json",
+        ))
+    })?;
+
     let _tray = TrayIconBuilder::new()
-        .icon(app.default_window_icon().unwrap().clone())
+        .icon(icon)
         .menu(&menu)
         .on_menu_event(move |app, event| match event.id.as_ref() {
             MENU_ID_QUIT => {
