@@ -44,5 +44,5 @@ opt-level = "z"      # 优先体积
 lto = "thin"         # 链接时优化（使用 thin 而非 true，平衡效果和编译时间）
 codegen-units = 1    # 提升优化效果
 strip = true         # 剥离符号
-panic = "abort"      # 避免 unwind 表
+panic = "abort"      # 避免 unwind 表；注意：panic 会直接终止进程，sidecar 子线程 panic 也会导致主进程退出
 

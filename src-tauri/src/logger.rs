@@ -31,6 +31,7 @@ impl Log for FileLogger {
             "[{}] {} {}: {}\n",
             now.format("%Y-%m-%d %H:%M:%S"),
             level,
+            // 安全：module_path() 仅在宏展开不完整时返回 None，正常日志调用不会触发
             record.module_path().unwrap_or("unknown"),
             record.args()
         );

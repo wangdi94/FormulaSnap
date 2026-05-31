@@ -15,7 +15,9 @@ pub fn register_hotkeys(app: &AppHandle) -> Result<(), Box<dyn std::error::Error
         .on_shortcut(shortcut, move |_app, _shortcut, event| {
             if event.state == ShortcutState::Pressed {
                 let handle = handle.clone();
-                let _ = handle.emit(CAPTURE_EVENT_NAME, ());
+                if let Err(e) = handle.emit(CAPTURE_EVENT_NAME, ()) {
+                    log::warn!("快捷键事件发送失败: {}", e);
+                }
             }
         })?;
 
