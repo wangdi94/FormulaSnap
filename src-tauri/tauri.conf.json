@@ -11,7 +11,7 @@
   },
   "app": {
     "withGlobalTauri": true,
-    "macosPrivateApi": true,
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "FormulaSnap",
