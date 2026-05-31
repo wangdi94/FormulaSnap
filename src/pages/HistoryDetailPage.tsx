@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import type { HistoryEntry } from "../types/history";
@@ -21,6 +21,14 @@ export default function HistoryDetailPage() {
     mathml: null,
     png: null,
   });
+
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   /* ── 加载详情 ── */
   useEffect(() => {
@@ -53,13 +61,15 @@ export default function HistoryDetailPage() {
       try {
         await copyToClipboard(entry.latex, format);
         setCopyState((prev) => ({ ...prev, [format]: "copied" }));
-        setTimeout(() => {
+        if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+        copyTimeoutRef.current = setTimeout(() => {
           setCopyState((prev) => ({ ...prev, [format]: null }));
         }, 2000);
       } catch (e) {
         console.error("Copy failed:", e);
         setCopyState((prev) => ({ ...prev, [format]: "error" }));
-        setTimeout(() => {
+        if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+        copyTimeoutRef.current = setTimeout(() => {
           setCopyState((prev) => ({ ...prev, [format]: null }));
         }, 3000);
       }

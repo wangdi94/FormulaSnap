@@ -72,6 +72,13 @@ export default function SettingsPage() {
   const [statsError, setStatsError] = useState<string | null>(null);
   const hotkeyRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const saveMsgTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (saveMsgTimeoutRef.current) clearTimeout(saveMsgTimeoutRef.current);
+    };
+  }, []);
 
   /* ── 加载统计（带 5 秒超时） ── */
   const fetchStats = useCallback(async () => {
@@ -175,7 +182,8 @@ export default function SettingsPage() {
     try {
       await saveSettings(settings);
       setSaveMsg('设置已保存');
-      setTimeout(() => setSaveMsg(null), 2500);
+      if (saveMsgTimeoutRef.current) clearTimeout(saveMsgTimeoutRef.current);
+      saveMsgTimeoutRef.current = setTimeout(() => setSaveMsg(null), 2500);
     } catch (e) {
       setSaveMsg(`保存失败: ${e}`);
     } finally {
