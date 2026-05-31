@@ -62,6 +62,7 @@ export default function HistoryPage() {
   const [page, setPage] = useState(0);
   const [isLastPage, setIsLastPage] = useState(false);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isCancelledRef = useRef(false);
 
   /* ── debounce 搜索词 ── */
   useEffect(() => {
@@ -78,31 +79,40 @@ export default function HistoryPage() {
   /* ── 加载数据 ── */
   const loadEntries = useCallback(async () => {
     setLoading(true);
+    isCancelledRef.current = false;
     try {
       let results: HistoryEntry[];
       if (debouncedQuery) {
         results = await invoke<HistoryEntry[]>("search_history", {
           query: debouncedQuery,
         });
+        if (isCancelledRef.current) return;
         setIsLastPage(true); // 搜索结果不分页
       } else {
         results = await invoke<HistoryEntry[]>("get_history", {
           limit: PAGE_SIZE,
           offset: page * PAGE_SIZE,
         });
+        if (isCancelledRef.current) return;
         setIsLastPage(results.length < PAGE_SIZE);
       }
       setEntries(results);
     } catch (e) {
+      if (isCancelledRef.current) return;
       console.error("Failed to load history:", e);
       setEntries([]);
     } finally {
-      setLoading(false);
+      if (!isCancelledRef.current) {
+        setLoading(false);
+      }
     }
   }, [debouncedQuery, page]);
 
   useEffect(() => {
     loadEntries();
+    return () => {
+      isCancelledRef.current = true;
+    };
   }, [loadEntries]);
 
   /* ── 渲染 ── */
