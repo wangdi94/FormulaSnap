@@ -17,6 +17,8 @@ export async function loadSettings(): Promise<AppSettings> {
   try {
     const raw = await invoke<string | null>('get_setting', { key: 'app_settings' });
     if (raw) {
+      // JSON.parse produces new object references, so shallow spread is safe here;
+      // nested objects (api_keys) from the parsed result are fully independent.
       return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
     }
   } catch (e) {

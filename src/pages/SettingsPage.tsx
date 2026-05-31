@@ -164,7 +164,7 @@ export default function SettingsPage() {
   }, [recording]);
 
   /* ── 更新 API Key ── */
-  const updateApiKey = (field: string, value: string) => {
+  const updateApiKey = (field: keyof AppSettings['api_keys'], value: string) => {
     setSettings((prev) => {
       if (!prev) return prev;
       return {

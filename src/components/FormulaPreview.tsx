@@ -47,7 +47,7 @@ export default function FormulaPreview({
       const text =
         format === "latex"
           ? mathFieldRef.current.value
-          : mathFieldRef.current!.getValue("mathml");
+          : mathFieldRef.current.getValue("mathml");
 
       navigator.clipboard.writeText(text).catch(console.error);
     },
