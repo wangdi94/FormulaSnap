@@ -28,6 +28,7 @@ from sidecar.ocr_engines.interface import (
     ApiKeyError,
     CostEstimate,
     NetworkError,
+    OcrError,
     OcrOptions,
     OcrResult,
     RateLimitError as OcrRateLimitError,
@@ -92,6 +93,8 @@ class ClaudeEngine(LlmProvider):
         except _APIConnectionError:
             raise NetworkError("Failed to connect to Claude API")
 
+        if not response.content:
+            raise OcrError("Claude 返回空内容")
         text_block = response.content[0]
         raw_text = getattr(text_block, "text", "") or ""
         latex = self._parse_response(raw_text)

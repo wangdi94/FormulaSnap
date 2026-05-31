@@ -28,6 +28,7 @@ from sidecar.ocr_engines.interface import (
     ApiKeyError,
     CostEstimate,
     NetworkError,
+    OcrError,
     OcrOptions,
     OcrResult,
     RateLimitError as OcrRateLimitError,
@@ -88,6 +89,8 @@ class OpenAIEngine(LlmProvider):
         except _APIConnectionError:
             raise NetworkError("Failed to connect to OpenAI API")
 
+        if not response.choices:
+            raise OcrError("OpenAI 返回空结果")
         raw_text = response.choices[0].message.content or ""
         latex = self._parse_response(raw_text)
 
