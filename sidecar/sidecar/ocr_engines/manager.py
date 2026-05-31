@@ -8,10 +8,13 @@ Provides a unified entry point for all OCR backends with:
 
 from __future__ import annotations
 
+import logging
 import time
 import threading
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 from sidecar.ocr_engines.interface import (
     CostEstimate,
@@ -237,16 +240,24 @@ class EngineManager:
 
         breaker = self._breakers[name]
         if not breaker.allow_request():
+            logger.warning(
+                "Backend '%s' is temporarily disabled (circuit open)", name
+            )
             raise OcrError(
                 f"Backend '{name}' is temporarily disabled (circuit open)"
             )
 
+        logger.debug("Calling engine '%s'", name)
         try:
             result = self._engines[name].recognize(image, options)
             breaker.record_success()
+            logger.debug("Engine '%s' succeeded", name)
             return result
-        except Exception:
+        except Exception as exc:
             breaker.record_failure()
+            logger.warning(
+                "Engine '%s' failed: %s", name, exc
+            )
             raise
 
     def _auto_recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
@@ -263,20 +274,27 @@ class EngineManager:
         last captured error.
         """
         ordered = self._route_order(image)
+        logger.info("Auto routing order: %s", ordered)
         last_error: Optional[Exception] = None
 
         for name in ordered:
             breaker = self._breakers[name]
             if not breaker.allow_request():
+                logger.debug("Skipping engine '%s' (circuit open)", name)
                 continue
 
             try:
                 result = self._engines[name].recognize(image, options)
                 breaker.record_success()
+                logger.info("Auto route succeeded with engine '%s'", name)
                 return result
             except Exception as exc:
                 breaker.record_failure()
                 last_error = exc
+                logger.warning(
+                    "Auto route: engine '%s' failed, trying next: %s",
+                    name, exc,
+                )
                 continue
 
         # If we get here, every engine was either circuit-broken or failed.

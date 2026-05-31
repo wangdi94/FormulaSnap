@@ -18,11 +18,14 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 import time
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -89,7 +92,7 @@ class CostTracker:
         try:
             tracker.check_rate_limit()
         except RateLimitExceeded as e:
-            print(f"Rate limited, retry after {e.retry_after}s")
+            logger.debug("Rate limited, retry after %ss", e.retry_after)
             return
 
         # ... make API call ...
@@ -137,6 +140,10 @@ class CostTracker:
                 elapsed = now - self._last_call_time
                 if elapsed < self._min_interval:
                     retry_after = self._min_interval - elapsed
+                    logger.warning(
+                        "Rate limit: minimum interval not elapsed (%.1fs < %.1fs)",
+                        elapsed, self._min_interval,
+                    )
                     raise RateLimitExceeded(
                         f"Minimum interval not elapsed. "
                         f"Retry after {retry_after:.1f}s",
@@ -147,6 +154,10 @@ class CostTracker:
             calls_today = self._count_calls_today(now)
             if calls_today >= self._daily_limit:
                 seconds_until_midnight = self._seconds_until_utc_midnight(now)
+                logger.warning(
+                    "Rate limit: daily limit of %d calls reached",
+                    self._daily_limit,
+                )
                 raise RateLimitExceeded(
                     f"Daily limit of {self._daily_limit} calls reached. "
                     f"Resets in {seconds_until_midnight:.0f}s",
@@ -186,6 +197,10 @@ class CostTracker:
             self._records.append(record)
             self._last_call_time = now
 
+        logger.debug(
+            "Recorded call: backend=%s tokens=%d cost=$%.6f",
+            backend, tokens_used, cost_usd,
+        )
         return record
 
     # ------------------------------------------------------------------
