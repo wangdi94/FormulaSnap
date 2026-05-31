@@ -84,6 +84,9 @@ class MathpixEngine:
         }
 
         try:
+            # NOTE: A new client is created per request instead of reusing a shared
+            # instance. This avoids lifecycle management issues (startup/shutdown)
+            # and keeps the engine stateless, which is simpler for a low-volume sidecar.
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     MATHPIX_API_URL, json=payload, headers=headers, timeout=30

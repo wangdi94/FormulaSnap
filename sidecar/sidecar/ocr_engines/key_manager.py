@@ -325,6 +325,10 @@ class FileBackend(KeyBackend):
             logger.error("Failed to save keys file: %s", e)
             raise
 
+    # NOTE: FileBackend is single-process only. Concurrent writes from
+    # multiple processes can corrupt keys.json. In this sidecar the file
+    # backend is accessed exclusively from one uvicorn worker.
+
     def get_key(self, service: str, key_name: str) -> Optional[str]:
         data = self._load_keys()
         service_keys = data.get(service, {})

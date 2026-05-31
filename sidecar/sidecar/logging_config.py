@@ -74,8 +74,12 @@ def setup_logging(
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
 
-    # Clear existing handlers to avoid duplicates
-    root_logger.handlers.clear()
+    # Only remove handlers we previously added (tagged with _formulasnap).
+    # This preserves handlers installed by third-party libraries or the runtime.
+    root_logger.handlers[:] = [
+        h for h in root_logger.handlers
+        if getattr(h, "_formulasnap", False)
+    ]
 
     # Log format
     formatter = logging.Formatter(
@@ -87,6 +91,7 @@ def setup_logging(
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
+    console_handler._formulasnap = True  # type: ignore[attr-defined]
     root_logger.addHandler(console_handler)
 
     # File handler (DEBUG level, rotating)
@@ -98,6 +103,7 @@ def setup_logging(
     )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
+    file_handler._formulasnap = True  # type: ignore[attr-defined]
     root_logger.addHandler(file_handler)
 
     # Log startup message

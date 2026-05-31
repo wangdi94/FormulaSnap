@@ -86,6 +86,11 @@ class CostTracker:
         - Maximum 100 calls per UTC day.
         - Minimum 2 seconds between consecutive calls.
 
+    NOTE: Call records are held in memory only and are lost on process restart.
+    This is acceptable because the sidecar runs as a single-process service
+    and the primary purpose of recording is rate-limit enforcement, not
+    long-term accounting.
+
     Usage:
         tracker = CostTracker(daily_limit=100, min_interval_secs=2.0)
 

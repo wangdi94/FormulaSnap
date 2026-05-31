@@ -62,6 +62,8 @@ class StatsResponse(BaseModel):
 # Engine registry & stats
 # ---------------------------------------------------------------------------
 
+# NOTE: _engines is only accessed from the FastAPI event loop (single-threaded).
+# No locking is needed because uvicorn serves requests on one thread by default.
 _engines: dict[str, OcrBackend] = {}
 
 
@@ -139,7 +141,7 @@ async def ocr_endpoint(request: OcrRequest):
     except binascii.Error as e:
         raise HTTPException(
             status_code=400,
-            detail={"error": "INVALID_IMAGE", "message": f"Invalid base64 image: {e}"},
+            detail={"error": "INVALID_IMAGE", "message": "Invalid base64 image data"},
         )
 
 
@@ -162,5 +164,5 @@ async def validate_config_endpoint(request: ValidateConfigRequest):
         engine = get_engine(request.backend)
         result = engine.validate_config()
         return {"valid": result.valid, "message": result.message}
-    except Exception as e:
+    except (OcrError, ValueError) as e:
         return {"valid": False, "message": str(e)}
