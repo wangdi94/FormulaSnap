@@ -11,6 +11,12 @@ use std::sync::Mutex;
 use tauri::WindowEvent;
 use tauri::Manager;
 
+/// 数据库连接包装器。
+///
+/// 使用 `std::sync::Mutex` 而非 `parking_lot::Mutex`，原因：
+/// 1. 标准库，无额外依赖
+/// 2. SQLite 是单写者模型，锁竞争极低，`parking_lot` 的性能优势可忽略
+/// 3. 已有中毒处理代码（`sidecar.rs` 中使用 `match` 模式处理 `PoisonError`）
 pub struct DbConn(pub Mutex<rusqlite::Connection>);
 
 /// 截取全屏并返回 base64 编码的 PNG 图片。
