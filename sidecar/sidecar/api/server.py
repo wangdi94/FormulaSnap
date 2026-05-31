@@ -88,8 +88,6 @@ async def health():
 @app.post("/api/ocr", response_model=OcrResponse)
 async def ocr_endpoint(request: OcrRequest):
     try:
-        cost_tracker.check_rate_limit()
-
         engine = get_engine(request.backend)
         image_bytes = base64.b64decode(request.image_base64)
         result = await engine.recognize(image_bytes, OcrOptions())
