@@ -60,11 +60,15 @@ export default function CaptureFlow() {
       setError(null);
       setResult(null);
 
+      const controller = new AbortController();
+      ocrAbortRef.current = controller;
+
       try {
-        const ocrResult = await callOcr(base64, backend);
+        const ocrResult = await callOcr(base64, backend, { signal: controller.signal });
         setResult(ocrResult);
         setState("result");
       } catch (err) {
+        if (controller.signal.aborted) return; // 被取消，不更新状态
         setError(mapSidecarError(err));
         setState("error");
       }

@@ -122,6 +122,7 @@ export async function healthCheck(): Promise<HealthResponse> {
 export async function callOcr(
   imageBase64: string,
   backend: OcrBackend | 'auto' = 'pix2text',
+  options?: { signal?: AbortSignal },
 ): Promise<OcrResponse> {
   return request<OcrResponse>('/api/ocr', {
     method: 'POST',
@@ -129,6 +130,7 @@ export async function callOcr(
       image_base64: imageBase64,
       backend,
     }),
+    signal: options?.signal,
   });
 }
 
