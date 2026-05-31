@@ -36,6 +36,7 @@ from sidecar.ocr_engines.interface import (
     RateLimitStatus,
     ValidationResult,
 )
+from sidecar.ocr_engines.image_utils import detect_mime_type
 from sidecar.ocr_engines.llm_base import LlmProvider
 
 # Gemini 2.5 Pro pricing (per million tokens)
@@ -46,21 +47,6 @@ GEMINI_OUTPUT_COST = 10.00 / 1_000_000
 GEMINI_IMAGE_LIMIT = 7 * 1024 * 1024
 
 GEMINI_MODEL = "gemini-2.5-pro"
-
-
-def _detect_mime_type(image: bytes) -> str:
-    """Detect image MIME type from magic bytes.
-
-    Returns 'image/png' for PNG, 'image/gif' for GIF, 'image/webp' for WebP,
-    and 'image/jpeg' as default fallback.
-    """
-    if image[:8] == b"\x89PNG\r\n\x1a\n":
-        return "image/png"
-    if image[:3] == b"GIF":
-        return "image/gif"
-    if image[:4] == b"RIFF" and image[8:12] == b"WEBP":
-        return "image/webp"
-    return "image/jpeg"
 
 
 def _compress_image(image: bytes) -> bytes:
@@ -134,7 +120,7 @@ class GeminiEngine(LlmProvider):
             effective_image = _compress_image(image)
 
         # Detect MIME type from original image (before compression)
-        mime_type = _detect_mime_type(image)
+        mime_type = detect_mime_type(image)
 
         try:
             client = genai.Client(api_key=self._api_key)

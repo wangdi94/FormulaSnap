@@ -35,6 +35,7 @@ from sidecar.ocr_engines.interface import (
     RateLimitStatus,
     ValidationResult,
 )
+from sidecar.ocr_engines.image_utils import detect_mime_type
 from sidecar.ocr_engines.llm_base import LlmProvider
 
 # gpt-4o pricing (per million tokens)
@@ -70,7 +71,7 @@ class OpenAIEngine(LlmProvider):
                             {
                                 "type": "image_url",
                                 "image_url": {
-                                    "url": f"data:image/png;base64,{image_base64}"
+                                    "url": f"data:{detect_mime_type(image)};base64,{image_base64}"
                                 },
                             },
                             {

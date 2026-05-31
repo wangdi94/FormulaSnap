@@ -35,6 +35,7 @@ from sidecar.ocr_engines.interface import (
     RateLimitStatus,
     ValidationResult,
 )
+from sidecar.ocr_engines.image_utils import detect_mime_type
 from sidecar.ocr_engines.llm_base import LlmProvider
 
 # Claude Sonnet pricing (per million tokens)
@@ -74,7 +75,7 @@ class ClaudeEngine(LlmProvider):
                                 "type": "image",
                                 "source": {
                                     "type": "base64",
-                                    "media_type": "image/png",
+                                    "media_type": detect_mime_type(image),
                                     "data": image_base64,
                                 },
                             },

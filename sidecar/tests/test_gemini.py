@@ -271,31 +271,31 @@ class TestGeminiEngine:
 
 
 class TestDetectMimeType:
-    """Tests for _detect_mime_type helper."""
+    """Tests for detect_mime_type helper."""
 
     def test_detect_png(self):
-        from sidecar.ocr_engines.gemini_engine import _detect_mime_type
+        from sidecar.ocr_engines.image_utils import detect_mime_type
         png_header = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
-        assert _detect_mime_type(png_header) == "image/png"
+        assert detect_mime_type(png_header) == "image/png"
 
     def test_detect_gif(self):
-        from sidecar.ocr_engines.gemini_engine import _detect_mime_type
+        from sidecar.ocr_engines.image_utils import detect_mime_type
         gif_header = b"GIF89a" + b"\x00" * 100
-        assert _detect_mime_type(gif_header) == "image/gif"
+        assert detect_mime_type(gif_header) == "image/gif"
 
     def test_detect_webp(self):
-        from sidecar.ocr_engines.gemini_engine import _detect_mime_type
+        from sidecar.ocr_engines.image_utils import detect_mime_type
         webp_header = b"RIFF\x00\x00\x00\x00WEBP" + b"\x00" * 100
-        assert _detect_mime_type(webp_header) == "image/webp"
+        assert detect_mime_type(webp_header) == "image/webp"
 
     def test_detect_jpeg_fallback(self):
-        from sidecar.ocr_engines.gemini_engine import _detect_mime_type
+        from sidecar.ocr_engines.image_utils import detect_mime_type
         jpeg_header = b"\xff\xd8\xff" + b"\x00" * 100
-        assert _detect_mime_type(jpeg_header) == "image/jpeg"
+        assert detect_mime_type(jpeg_header) == "image/jpeg"
 
     def test_detect_unknown_defaults_to_jpeg(self):
-        from sidecar.ocr_engines.gemini_engine import _detect_mime_type
-        assert _detect_mime_type(b"\x00" * 100) == "image/jpeg"
+        from sidecar.ocr_engines.image_utils import detect_mime_type
+        assert detect_mime_type(b"\x00" * 100) == "image/jpeg"
 
 
 class TestCompressImage:
