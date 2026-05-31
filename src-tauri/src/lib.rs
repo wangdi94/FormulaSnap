@@ -217,6 +217,8 @@ pub fn run() {
         .build(tauri::generate_context!())
         .unwrap_or_else(|e| {
             eprintln!("Tauri 应用构建失败: {}", e);
+            // 安全：构建失败发生在 setup 之前，sidecar 子进程尚未启动，
+            // 因此无需清理 sidecar 资源。exit(1) 在此场景下是安全的。
             std::process::exit(1);
         })
         .run(|app_handle, event| {
