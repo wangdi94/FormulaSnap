@@ -35,7 +35,7 @@ npx tsc --noEmit --skipLibCheck  # Type check
 - **No new SQLite databases** — use existing `rusqlite` in `db.rs`.
 - **No FTS manual edits** — FTS syncs via triggers. Don't modify `history_fts` directly.
 - **No manual `pyinstaller.spec` edits** — use `sidecar/build.sh` or `build.bat` to rebuild sidecar binary.
-- **No Rust CI job** — GitHub Actions only runs frontend + backend Python. Add `cargo test`/`clippy` if adding Rust CI.
+- **Rust CI job exists** — `ci.yml` now includes a `rust` job with `cargo test --lib` + `cargo clippy -- -D warnings` (3-platform matrix: ubuntu/windows/macos).
 - **No `unwrap()` in production Rust** — `tray.rs:44` and `sidecar.rs:86` have `.unwrap()` that will panic. Use `.map_err(|e| e.to_string())?`.
 - **`BACKEND_LABELS` duplicated in 4 files** — extract to `src/lib/constants.ts` before adding new backends.
 - Frontend bypasses Rust to call sidecar HTTP directly. If you need Rust-side logic for OCR calls, refactor the proxy path.
@@ -56,11 +56,12 @@ npx tsc --noEmit --skipLibCheck  # Type check
 - No coverage config for any language
 
 ## Build/CI
-- CI: `.github/workflows/ci.yml` — frontend (vitest) + backend (pytest) jobs, 3-platform matrix (ubuntu/windows/macos)
-- No Rust CI job, no lint/format checks. Add `cargo test`/`clippy` if adding Rust CI.
+- CI: `.github/workflows/ci.yml` — 5 jobs: frontend (vitest), backend (pytest), rust (cargo test + clippy), workflow-lint (actionlint), build-verification (full Tauri build); all run on 3-platform matrix (ubuntu/windows/macos)
+- Rust CI: `cargo test --lib` + `cargo clippy -- -D warnings` (3-platform matrix)
+- Workflow lint: `actionlint` validates all `.github/workflows/*.yml` files
 - Release: `.github/workflows/release.yml` — PyInstaller sidecar + Tauri build on `v*` tags, macOS Intel+ARM+Windows
-- `release.yml` uses `tauri-apps/tauri-action@v0` — should be `@v2` for Tauri v2
-- `release.yml` uses `pnpm build` (no `run`) — this skips `prebuild` hook, breaking version sync. Use `pnpm run build`.
+- `release.yml` uses `tauri-apps/tauri-action@v0.6` (Tauri v2 compatible)
+- `release.yml` uses `pnpm run build` — correctly triggers `prebuild` hook for version sync
 - Tauri bundles: `bundle.targets: "all"`, sidecar via `externalBin` (built by `sidecar/build.sh`)
-- CSP disabled (`"csp": null`) — security concern
+- CSP is configured with a full security policy (default-src + script-src + style-src + connect-src etc.) — not null
 - `pyinstaller.spec` has `console=True` — sidecar opens terminal window in production builds
