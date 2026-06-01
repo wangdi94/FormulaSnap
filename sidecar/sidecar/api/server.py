@@ -1,10 +1,12 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import AsyncIterator, Optional
 import base64
 import binascii
 import logging
+import os
 import time
 
 from sidecar.ocr_engines.interface import (
@@ -15,12 +17,33 @@ from sidecar.ocr_engines.cost_tracker import cost_tracker, RateLimitExceeded
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="FormulaSnap Sidecar")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    yield
+    logger.info("Shutting down: closing OCR engines...")
+    for name, engine in _engines.items():
+        aclose_fn = getattr(engine, "aclose", None)
+        if aclose_fn is not None:
+            try:
+                await aclose_fn()
+                logger.info("Closed engine: %s", name)
+            except Exception:
+                logger.warning("Error closing engine %s", name, exc_info=True)
+
+
+app = FastAPI(title="FormulaSnap Sidecar", lifespan=lifespan)
 
 # CORS for localhost
+_sidecar_port = os.environ.get("SIDECAR_PORT", "8477")
+_allowed_origins = [
+    f"http://localhost:{_sidecar_port}",
+    "http://localhost:1420",
+    "tauri://localhost",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:1420", "tauri://localhost"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -92,6 +115,7 @@ async def ocr_endpoint(request: OcrRequest):
     try:
         engine = get_engine(request.backend)
         image_bytes = base64.b64decode(request.image_base64)
+
         result = await engine.recognize(image_bytes, OcrOptions())
 
         tokens = result.cost_estimate.tokens_used if result.cost_estimate else 0
