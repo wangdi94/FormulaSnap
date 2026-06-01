@@ -3,16 +3,7 @@ import type { AppSettings } from '../types/settings';
 import { loadSettings, saveSettings, resetSettings } from '../lib/settings';
 import { getStats, type StatsResponse } from '../lib/sidecarClient';
 import { setLang } from '../lib/i18n';
-
-/* ─── 后端选项 ─── */
-const BACKENDS = [
-  { value: 'auto', label: '自动选择' },
-  { value: 'pix2text', label: 'Pix2Text（本地）' },
-  { value: 'mathpix', label: 'Mathpix' },
-  { value: 'openai', label: 'OpenAI GPT-4o' },
-  { value: 'claude', label: 'Claude' },
-  { value: 'gemini', label: 'Gemini' },
-] as const;
+import { BACKENDS } from '../lib/constants';
 
 /* ─── API Key 字段定义 ─── */
 const API_KEY_FIELDS: {

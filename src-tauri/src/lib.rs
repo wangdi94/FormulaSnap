@@ -9,8 +9,8 @@ mod tray;
 
 use std::sync::Mutex;
 use tauri::Emitter;
-use tauri::WindowEvent;
 use tauri::Manager;
+use tauri::WindowEvent;
 
 /// 数据库连接包装器。
 ///
@@ -60,14 +60,18 @@ fn open_selection_window(app: tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let sel_win = WebviewWindowBuilder::new(&app, "selection", tauri::WebviewUrl::App("/selection".into()))
-        .title("选择区域")
-        .transparent(true)
-        .decorations(false)
-        .fullscreen(true)
-        .always_on_top(true)
-        .build()
-        .map_err(|e| e.to_string())?;
+    let sel_win = WebviewWindowBuilder::new(
+        &app,
+        "selection",
+        tauri::WebviewUrl::App("/selection".into()),
+    )
+    .title("选择区域")
+    .transparent(true)
+    .decorations(false)
+    .fullscreen(true)
+    .always_on_top(true)
+    .build()
+    .map_err(|e| e.to_string())?;
     sel_win.set_focus().map_err(|e| e.to_string())?;
 
     Ok(())
@@ -146,7 +150,8 @@ pub fn run() {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
-    builder.invoke_handler(tauri::generate_handler![
+    builder
+        .invoke_handler(tauri::generate_handler![
             get_history,
             get_history_by_id,
             delete_history,
@@ -178,8 +183,7 @@ pub fn run() {
 
             let conn = rusqlite::Connection::open(&db_path)
                 .map_err(|e| format!("打开数据库失败: {}", e))?;
-            db::initialize_database(&conn)
-                .map_err(|e| format!("初始化数据库失败: {}", e))?;
+            db::initialize_database(&conn).map_err(|e| format!("初始化数据库失败: {}", e))?;
 
             app.manage(DbConn(Mutex::new(conn)));
 

@@ -5,7 +5,7 @@
 ## Overview
 Tests for OCR sidecar: engine implementations, manager routing, FastAPI endpoints, response parsing.
 
-## Structure (11 files)
+## Structure (9 files)
 - `test_interface.py` — Dataclass + error hierarchy contract
 - `test_manager.py` — EngineManager routing, circuit breaker, fallback (436 lines, largest)
 - `test_server.py` — FastAPI TestClient endpoint tests
@@ -16,8 +16,6 @@ Tests for OCR sidecar: engine implementations, manager routing, FastAPI endpoint
 - `test_pix2text.py` — Pix2Text engine (local OCR)
 - `test_mathpix.py` — Mathpix HTTP API engine
 - `test_llm_base.py` — OpenAI engine
-- `test_health.py` — Health endpoint (overlaps with test_server)
-- `test_framework.py` — Pytest sanity check (dead code, ignore)
 
 ## Conventions
 - `setup_method(self)` — per-test setup, no fixtures
@@ -30,8 +28,6 @@ Tests for OCR sidecar: engine implementations, manager routing, FastAPI endpoint
 ## Anti-patterns
 - Don't use pytest fixtures — use `setup_method`
 - Don't import symbols to mock — patch module-level variables
-- `test_health.py` duplicates `test_server.py` — prefer test_server
-- `test_framework.py` is dead code — don't add more placeholder tests
 - No `as any` or `cast` — use proper type assertions
 
 ## Running

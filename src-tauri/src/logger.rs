@@ -1,11 +1,11 @@
 use log::{Level, LevelFilter, Log, Metadata, Record};
 use std::fs::{File, OpenOptions};
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::sync::Mutex;
 
 struct FileLogger {
-    file: Mutex<File>,
+    file: Mutex<BufWriter<File>>,
 }
 
 impl Log for FileLogger {
@@ -40,9 +40,6 @@ impl Log for FileLogger {
             if file.write_all(message.as_bytes()).is_err() {
                 eprint!("{}", message);
             }
-            if file.flush().is_err() {
-                eprintln!("[logger] flush failed");
-            }
         } else {
             // mutex 中毒时降级到 stderr
             eprint!("{}", message);
@@ -60,8 +57,7 @@ impl Log for FileLogger {
 
 pub fn init_logger(app_data_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let logs_dir = app_data_dir.join("logs");
-    std::fs::create_dir_all(&logs_dir)
-        .map_err(|e| format!("创建日志目录失败: {}", e))?;
+    std::fs::create_dir_all(&logs_dir).map_err(|e| format!("创建日志目录失败: {}", e))?;
 
     let log_path = logs_dir.join("formulasnap.log");
     let file = OpenOptions::new()
@@ -71,7 +67,7 @@ pub fn init_logger(app_data_dir: &Path) -> Result<(), Box<dyn std::error::Error>
         .map_err(|e| format!("打开日志文件失败: {}", e))?;
 
     let logger = FileLogger {
-        file: Mutex::new(file),
+        file: Mutex::new(BufWriter::new(file)),
     };
 
     log::set_boxed_logger(Box::new(logger))?;

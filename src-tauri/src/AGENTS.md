@@ -69,9 +69,6 @@ Run: `cargo test` from `src-tauri/`.
 
 ## Known Issues
 
-- `tray.rs:44` — `.unwrap()` on `default_window_icon()`. Panics if no icon configured.
-- `sidecar.rs:86` — `.unwrap()` on mutex lock in `stop_sidecar()`. Panics on poisoned mutex.
-- `lib.rs:117-118` — `.expect()` in setup path. Acceptable for startup, but won't recover gracefully.
 - No `tauri-plugin-shell` sidecar cleanup on crash (process stays orphaned if app force-killed).
 
 ## Adding a New Command

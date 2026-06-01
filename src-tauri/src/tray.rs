@@ -27,15 +27,21 @@ pub const ALL_MENU_IDS: &[&str] = &[
     MENU_ID_QUIT,
 ];
 
+fn show_and_focus_window<R: Runtime>(app: &AppHandle<R>, window_name: &str) {
+    if let Some(window) = app.get_webview_window(window_name) {
+        if let Err(e) = window.show() {
+            log::warn!("显示窗口 '{}' 失败: {}", window_name, e);
+        }
+        if let Err(e) = window.set_focus() {
+            log::warn!("聚焦窗口 '{}' 失败: {}", window_name, e);
+        }
+    }
+}
+
 pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let quit_i = MenuItem::with_id(app, MENU_ID_QUIT, "退出", true, None::<&str>)?;
-    let screenshot_i = MenuItem::with_id(
-        app,
-        MENU_ID_SCREENSHOT,
-        SHORTCUT_LABEL,
-        true,
-        None::<&str>,
-    )?;
+    let screenshot_i =
+        MenuItem::with_id(app, MENU_ID_SCREENSHOT, SHORTCUT_LABEL, true, None::<&str>)?;
     let history_i = MenuItem::with_id(app, MENU_ID_HISTORY, "历史记录", true, None::<&str>)?;
     let settings_i = MenuItem::with_id(app, MENU_ID_SETTINGS, "设置", true, None::<&str>)?;
     let about_i = MenuItem::with_id(app, MENU_ID_ABOUT, "关于", true, None::<&str>)?;
@@ -60,53 +66,25 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                 app.exit(0);
             }
             MENU_ID_SCREENSHOT => {
-                if let Some(window) = app.get_webview_window("main") {
-                    if let Err(e) = window.show() {
-                        log::warn!("显示主窗口失败: {}", e);
-                    }
-                    if let Err(e) = window.set_focus() {
-                        log::warn!("聚焦主窗口失败: {}", e);
-                    }
-                }
+                show_and_focus_window(app, "main");
                 if let Err(e) = app.emit("open-selection", ()) {
                     log::warn!("发送 open-selection 事件失败: {}", e);
                 }
             }
             MENU_ID_HISTORY => {
-                if let Some(window) = app.get_webview_window("main") {
-                    if let Err(e) = window.show() {
-                        log::warn!("显示主窗口失败: {}", e);
-                    }
-                    if let Err(e) = window.set_focus() {
-                        log::warn!("聚焦主窗口失败: {}", e);
-                    }
-                }
+                show_and_focus_window(app, "main");
                 if let Err(e) = app.emit("navigate", "/history") {
                     log::warn!("发送 navigate 事件失败: {}", e);
                 }
             }
             MENU_ID_SETTINGS => {
-                if let Some(window) = app.get_webview_window("main") {
-                    if let Err(e) = window.show() {
-                        log::warn!("显示主窗口失败: {}", e);
-                    }
-                    if let Err(e) = window.set_focus() {
-                        log::warn!("聚焦主窗口失败: {}", e);
-                    }
-                }
+                show_and_focus_window(app, "main");
                 if let Err(e) = app.emit("navigate", "/settings") {
                     log::warn!("发送 navigate 事件失败: {}", e);
                 }
             }
             MENU_ID_ABOUT => {
-                if let Some(window) = app.get_webview_window("main") {
-                    if let Err(e) = window.show() {
-                        log::warn!("显示主窗口失败: {}", e);
-                    }
-                    if let Err(e) = window.set_focus() {
-                        log::warn!("聚焦主窗口失败: {}", e);
-                    }
-                }
+                show_and_focus_window(app, "main");
             }
             _ => {}
         })
@@ -124,12 +102,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                             log::warn!("隐藏主窗口失败: {}", e);
                         }
                     } else {
-                        if let Err(e) = window.show() {
-                            log::warn!("显示主窗口失败: {}", e);
-                        }
-                        if let Err(e) = window.set_focus() {
-                            log::warn!("聚焦主窗口失败: {}", e);
-                        }
+                        show_and_focus_window(&app, "main");
                     }
                 }
             }

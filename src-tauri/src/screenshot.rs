@@ -48,7 +48,19 @@ pub fn capture_region(
 }
 
 fn encode_png(image: &DynamicImage) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let rgba = image.to_rgba8();
+    let width = rgba.width();
+    let height = rgba.height();
+    let data = rgba.into_raw();
+
     let mut buf = std::io::Cursor::new(Vec::new());
-    image.write_to(&mut buf, image::ImageFormat::Png)?;
+    {
+        let mut encoder = png::Encoder::new(&mut buf, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder.set_compression(png::Compression::Fast);
+        let mut writer = encoder.write_header()?;
+        writer.write_image_data(&data)?;
+    } // writer & encoder dropped here, releasing the borrow on buf
     Ok(buf.into_inner())
 }

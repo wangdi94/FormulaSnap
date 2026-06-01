@@ -43,6 +43,7 @@ class MathpixEngine:
     ) -> None:
         self._app_id = app_id or os.environ.get("MATHPIX_APP_ID", "")
         self._app_key = app_key or os.environ.get("MATHPIX_APP_KEY", "")
+        self._client: httpx.AsyncClient = httpx.AsyncClient(timeout=30.0)
 
     # ------------------------------------------------------------------
     # OcrBackend protocol methods
@@ -84,13 +85,9 @@ class MathpixEngine:
         }
 
         try:
-            # NOTE: A new client is created per request instead of reusing a shared
-            # instance. This avoids lifecycle management issues (startup/shutdown)
-            # and keeps the engine stateless, which is simpler for a low-volume sidecar.
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    MATHPIX_API_URL, json=payload, headers=headers, timeout=30
-                )
+            response = await self._client.post(
+                MATHPIX_API_URL, json=payload, headers=headers
+            )
         except httpx.RequestError as exc:
             raise NetworkError(f"Network error: {exc}") from exc
 

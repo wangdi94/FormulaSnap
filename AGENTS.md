@@ -5,9 +5,9 @@ Desktop OCR app: screenshot → LaTeX. Tauri v2 shell, React frontend, Python si
 
 ## Architecture (non-obvious)
 - **Frontend talks to Python sidecar directly via HTTP** — Rust layer does NOT proxy OCR calls. This is intentional but breaks the usual Tauri pattern.
-- **One SQLite database** via `rusqlite` in Rust (`db.rs`). `tauri-plugin-sql` was removed — `capabilities/default.json` still has `"sql:default"` (stale, remove it).
+- **One SQLite database** via `rusqlite` in Rust (`db.rs`). `tauri-plugin-sql` was removed — `capabilities/default.json` previously had `"sql:default"` (stale, now removed).
 - **Engine manager** in sidecar handles routing: circuit breaker, cost-aware fallback chain across Pix2Text/Mathpix/OpenAI/Claude/Gemini.
-- **`register_engine()` in server.py is orphaned** — never called in production. The FastAPI `/api/ocr` endpoint always returns 400. Engine logic goes through `EngineManager` instead. Tests mock `get_engine` to bypass.
+- **`register_engine()` in server.py is wired up** — called by `main.py` at startup via `_register_engines()`. Registers all 5 engines. The FastAPI `/api/ocr` endpoint works through this path.
 - **Settings split across 3 backends**: Rust DB (app settings), localStorage (theme/language), Python keyring (API keys). No single source of truth.
 
 ## OCR Pipeline
@@ -36,8 +36,8 @@ npx tsc --noEmit --skipLibCheck  # Type check
 - **No FTS manual edits** — FTS syncs via triggers. Don't modify `history_fts` directly.
 - **No manual `pyinstaller.spec` edits** — use `sidecar/build.sh` or `build.bat` to rebuild sidecar binary.
 - **Rust CI job exists** — `ci.yml` now includes a `rust` job with `cargo test --lib` + `cargo clippy -- -D warnings` (3-platform matrix: ubuntu/windows/macos).
-- **No `unwrap()` in production Rust** — `tray.rs:44` and `sidecar.rs:86` have `.unwrap()` that will panic. Use `.map_err(|e| e.to_string())?`.
-- **`BACKEND_LABELS` duplicated in 4 files** — extract to `src/lib/constants.ts` before adding new backends.
+- **No `unwrap()` in production Rust** — `tray.rs:44` and `sidecar.rs:86` previously had `.unwrap()` that would panic (now fixed to use `.map_err(|e| e.to_string())?`).
+- **`BACKEND_LABELS` centralized in `src/lib/constants.ts`** — was previously duplicated in 4 files.
 - Frontend bypasses Rust to call sidecar HTTP directly. If you need Rust-side logic for OCR calls, refactor the proxy path.
 
 ## Conventions
