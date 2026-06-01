@@ -18,11 +18,13 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
@@ -86,10 +88,9 @@ class CostTracker:
         - Maximum 100 calls per UTC day.
         - Minimum 2 seconds between consecutive calls.
 
-    NOTE: Call records are held in memory only and are lost on process restart.
-    This is acceptable because the sidecar runs as a single-process service
-    and the primary purpose of recording is rate-limit enforcement, not
-    long-term accounting.
+    NOTE: Call records are persisted to ``~/.formulasnap/cost_stats.json``
+    for survival across process restarts. Records older than 24 hours are
+    pruned on load.
 
     Usage:
         tracker = CostTracker(daily_limit=100, min_interval_secs=2.0)
@@ -125,6 +126,17 @@ class CostTracker:
         self._lock = threading.Lock()
         self._records: list[CallRecord] = []
         self._last_call_time: float = 0.0
+
+        # Persistence: load saved records from disk (if any).
+        # Only enabled when using real time (time_fn is None) — test
+        # callers that pass a custom time_fn skip file I/O.
+        if time_fn is None:
+            self._data_file: Optional[Path] = (
+                Path.home() / ".formulasnap" / "cost_stats.json"
+            )
+            self._load_from_file()
+        else:
+            self._data_file = None
 
     # ------------------------------------------------------------------
     # Rate Limiting
@@ -201,6 +213,7 @@ class CostTracker:
         with self._lock:
             self._records.append(record)
             self._last_call_time = now
+            self._save_to_file()
 
         logger.debug(
             "Recorded call: backend=%s tokens=%d cost=$%.6f",
@@ -272,6 +285,7 @@ class CostTracker:
             )
             self._records.append(record)
             self._last_call_time = now
+            self._save_to_file()
 
         logger.debug(
             "Recorded call: backend=%s tokens=%d cost=$%.6f",
@@ -327,6 +341,32 @@ class CostTracker:
     # Internal Helpers
     # ------------------------------------------------------------------
 
+    _EVICTION_SECS = 24 * 60 * 60  # 24 hours
+
+    def _evict_old_records(self, now: float) -> None:
+        """Remove records older than 24 hours.
+
+        Called internally while the lock is held. Since records are appended
+        in chronological order, we can drop a prefix slice efficiently.
+
+        Args:
+            now: Current Unix timestamp.
+        """
+        cutoff = now - self._EVICTION_SECS
+        # Records are append-sorted by timestamp — find the first to keep
+        first_keep = 0
+        for i, r in enumerate(self._records):
+            if r.timestamp >= cutoff:
+                first_keep = i
+                break
+        else:
+            # All records are older than cutoff — clear entirely
+            self._records.clear()
+            return
+
+        if first_keep > 0:
+            del self._records[:first_keep]
+
     def _count_calls_today(self, now: float) -> int:
         """Count calls made in the current UTC day.
 
@@ -336,6 +376,7 @@ class CostTracker:
         Returns:
             Number of calls made today (UTC).
         """
+        self._evict_old_records(now)
         today_start = self._utc_day_start(now)
         return sum(1 for r in self._records if r.timestamp >= today_start)
 
@@ -370,6 +411,89 @@ class CostTracker:
             hour=0, minute=0, second=0, microsecond=0
         )
         return (next_midnight - dt).total_seconds()
+
+    # ------------------------------------------------------------------
+    # JSON Persistence
+    # ------------------------------------------------------------------
+
+    def _load_from_file(self) -> None:
+        """Load persistent records from the JSON data file (if it exists).
+
+        Filters out records older than 24 hours relative to
+        ``self._time()`` so that stale data is not retained across restarts.
+        Errors are logged and silently swallowed to avoid crashing on
+        corrupt files or permissions.
+        """
+        data_file = self._data_file
+        if data_file is None or not data_file.exists():
+            return
+
+        try:
+            with open(data_file, "r") as f:
+                data = json.load(f)
+
+            if not isinstance(data, list):
+                logger.warning("Cost stats file has invalid format (not a list)")
+                return
+
+            cutoff = self._time() - self._EVICTION_SECS
+            loaded = 0
+            for item in data:
+                ts = item.get("timestamp", 0)
+                if ts >= cutoff:
+                    self._records.append(CallRecord(
+                        backend=item["backend"],
+                        tokens_used=item["tokens_used"],
+                        cost_usd=item["cost_usd"],
+                        timestamp=ts,
+                    ))
+                    loaded += 1
+
+            logger.info("Loaded %d cost records from %s", loaded, self._data_file)
+        except Exception:
+            logger.warning(
+                "Failed to load cost stats from %s", self._data_file, exc_info=True,
+            )
+
+    def _save_to_file(self) -> None:
+        """Persist all current records to the JSON data file.
+
+        Creates the parent directory if needed. Errors are logged and
+        silently swallowed so that a write failure never breaks the caller.
+        """
+        data_file = self._data_file
+        if data_file is None:
+            return
+
+        if not self._records:
+            # Nothing to persist — remove the file if it exists to keep
+            # the filesystem clean.
+            try:
+                if data_file.exists():
+                    data_file.unlink()
+            except Exception:
+                logger.warning(
+                    "Failed to remove empty cost stats file", exc_info=True,
+                )
+            return
+
+        try:
+            data_file.parent.mkdir(parents=True, exist_ok=True)
+            data = [
+                {
+                    "backend": r.backend,
+                    "tokens_used": r.tokens_used,
+                    "cost_usd": r.cost_usd,
+                    "timestamp": r.timestamp,
+                }
+                for r in self._records
+            ]
+            with open(data_file, "w") as f:
+                json.dump(data, f)
+        except Exception:
+            logger.warning(
+                "Failed to save cost stats to %s", self._data_file, exc_info=True,
+            )
 
 
 # Module-level singleton for global use
