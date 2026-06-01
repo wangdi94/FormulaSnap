@@ -1,15 +1,13 @@
 fn main() {
-    let mut attributes = tauri_build::Attributes::new();
+    let attributes = tauri_build::Attributes::new();
 
+    // Disable tauri-build's default manifest embedding (which only targets bins, not tests)
+    // and embed our manifest manually so it applies to test binaries too.
     #[cfg(windows)]
-    {
-        // Disable tauri-build's default manifest embedding (which only targets bins, not tests)
-        // and embed our manifest manually so it applies to test binaries too.
-        attributes = attributes.windows_attributes(
-            tauri_build::WindowsAttributes::new_without_app_manifest(),
-        );
+    let attributes = {
         add_manifest();
-    }
+        attributes.windows_attributes(tauri_build::WindowsAttributes::new_without_app_manifest())
+    };
 
     tauri_build::try_build(attributes).expect("failed to run tauri build");
 }
