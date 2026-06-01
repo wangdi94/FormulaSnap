@@ -4,6 +4,7 @@ use rusqlite::{Connection, Result};
 /// This function is idempotent - safe to call multiple times.
 pub fn initialize_database(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA journal_mode=WAL;")?;
+    conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
 
     // Create history table
     conn.execute_batch(
