@@ -78,6 +78,17 @@ export interface ValidateConfigResponse {
   message: string;
 }
 
+/** API Key 状态项 */
+export interface KeyStatusItem {
+  backend: string;
+  configured: boolean;
+}
+
+/** API Key 列表响应 */
+export interface KeysResponse {
+  keys: KeyStatusItem[];
+}
+
 /** Sidecar API 错误 */
 export class SidecarError extends Error {
   constructor(
@@ -190,6 +201,26 @@ export async function validateConfig(
     method: 'POST',
     body: JSON.stringify({ backend }),
   });
+}
+
+/**
+ * 保存 API Key 到 sidecar keyring
+ */
+export async function saveApiKey(
+  backend: string,
+  key: string,
+): Promise<void> {
+  await request<{ status: string }>('/api/keys', {
+    method: 'POST',
+    body: JSON.stringify({ backend, key }),
+  });
+}
+
+/**
+ * 获取所有 API Key 的配置状态（不返回实际值）
+ */
+export async function getApiKeys(): Promise<KeysResponse> {
+  return request<KeysResponse>('/api/keys');
 }
 
 /**

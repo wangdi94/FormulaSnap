@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AppSettings } from '../types/settings';
 import { loadSettings, saveSettings, resetSettings } from '../lib/settings';
-import { getStats, type StatsResponse } from '../lib/sidecarClient';
+import { getStats, saveApiKey, getApiKeys, type StatsResponse } from '../lib/sidecarClient';
 import { setLang, t } from '../lib/i18n';
 import { getBackendOptions } from '../lib/constants';
 
@@ -58,8 +58,10 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [isError, setIsError] = useState(false);
   const [recording, setRecording] = useState(false);
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [configuredKeys, setConfiguredKeys] = useState<Record<string, boolean>>({});
   const [statsError, setStatsError] = useState<string | null>(null);
   const hotkeyRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -116,6 +118,7 @@ export default function SettingsPage() {
           monthly_budget_usd: 10,
           language: 'zh',
         });
+        setLang('zh');
       })
       .finally(() => setLoading(false));
   }, []);
@@ -125,6 +128,19 @@ export default function SettingsPage() {
     fetchStats();
     return () => abortRef.current?.abort();
   }, [fetchStats]);
+
+  /* ── 同步 sidecar key 状态 ── */
+  useEffect(() => {
+    getApiKeys()
+      .then((resp) => {
+        const map: Record<string, boolean> = {};
+        for (const item of resp.keys) {
+          map[item.backend] = item.configured;
+        }
+        setConfiguredKeys(map);
+      })
+      .catch((e) => console.warn('Failed to load key status:', e));
+  }, []);
 
   /* ── 快捷键录制 ── */
   const handleRecordHotkey = useCallback(() => {
@@ -171,12 +187,33 @@ export default function SettingsPage() {
     setSaving(true);
     setSaveMsg(null);
     try {
-      await saveSettings(settings);
-      setSaveMsg(t('settings.saved'));
+      const keyErrors: string[] = [];
+      for (const { key } of API_KEY_FIELDS) {
+        const value = settings.api_keys[key];
+        if (value) {
+          try {
+            await saveApiKey(key, value);
+          } catch (e) {
+            keyErrors.push(`${key}: ${String(e)}`);
+          }
+        }
+      }
+
+      const { api_keys: _ignored, ...settingsWithoutKeys } = settings;
+      await saveSettings(settingsWithoutKeys as AppSettings);
+
+      if (keyErrors.length > 0) {
+        setSaveMsg(t('settings.save_partial', { errors: keyErrors.join(', ') }));
+        setIsError(true);
+      } else {
+        setSaveMsg(t('settings.saved'));
+        setIsError(false);
+      }
       if (saveMsgTimeoutRef.current) clearTimeout(saveMsgTimeoutRef.current);
-      saveMsgTimeoutRef.current = setTimeout(() => setSaveMsg(null), 2500);
+      saveMsgTimeoutRef.current = setTimeout(() => { setSaveMsg(null); setIsError(false); }, 2500);
     } catch (e) {
       setSaveMsg(t('settings.save_failed', { error: String(e) }));
+      setIsError(true);
     } finally {
       setSaving(false);
     }
@@ -216,6 +253,11 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between mb-1.5">
                 <label htmlFor={`apikey-${key}`} className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {label}
+                  {configuredKeys[key] && (
+                    <span className="ml-2 inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                      {t('settings.key_configured')}
+                    </span>
+                  )}
                 </label>
                 {link && (
                   <a
@@ -433,7 +475,7 @@ export default function SettingsPage() {
         <div className="flex items-center justify-between">
           <div className="text-sm">
             {saveMsg && (
-              <span className={`transition-opacity ${saveMsg.includes(t('settings.save_failed', { error: '' }).replace(': ', '')) ? 'text-red-500' : 'text-green-600 dark:text-green-400'}`}>
+              <span className={`transition-opacity ${isError ? 'text-red-500' : 'text-green-600 dark:text-green-400'}`}>
                 {saveMsg}
               </span>
             )}
@@ -446,7 +488,8 @@ export default function SettingsPage() {
                   const defaults = await resetSettings();
                   setSettings(defaults);
                   setSaveMsg(t('settings.reset_done'));
-                  setTimeout(() => setSaveMsg(null), 2500);
+                  setIsError(false);
+                  setTimeout(() => { setSaveMsg(null); setIsError(false); }, 2500);
                 }
               }}
               className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400
