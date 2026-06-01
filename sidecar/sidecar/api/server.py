@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import AsyncIterator, Optional
@@ -8,7 +8,6 @@ import binascii
 import logging
 import os
 import threading
-import time
 
 from sidecar.ocr_engines.interface import (
     OcrBackend, OcrOptions, OcrError,
