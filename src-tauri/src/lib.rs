@@ -68,16 +68,7 @@ fn open_selection_window(app: tauri::AppHandle) -> Result<(), String> {
         .always_on_top(true)
         .build()
         .map_err(|e| e.to_string())?;
-
-    if let Some(main_win) = app.get_webview_window("main") {
-        sel_win.on_window_event(move |event| {
-            if let WindowEvent::Destroyed = event {
-                if let Err(e) = main_win.emit("selection-cancelled", ()) {
-                    log::warn!("发送 selection-cancelled 事件失败: {}", e);
-                }
-            }
-        });
-    }
+    sel_win.set_focus().map_err(|e| e.to_string())?;
 
     Ok(())
 }

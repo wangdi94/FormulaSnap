@@ -23,16 +23,6 @@ export default function SelectionPage() {
       });
   }, []);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        getCurrentWindow().close();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
   const handleSelected = useCallback(
     async (rect: SelectionRect) => {
       await emit("selection-result", rect);
@@ -41,9 +31,20 @@ export default function SelectionPage() {
     [],
   );
 
-  const handleCancel = useCallback(() => {
-    getCurrentWindow().close();
+  const handleCancel = useCallback(async () => {
+    await emit("selection-cancelled");
+    await getCurrentWindow().close();
   }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        handleCancel();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [handleCancel]);
 
   if (!screenshot) {
     return (

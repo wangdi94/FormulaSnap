@@ -109,44 +109,44 @@ export default function RegionSelector({
   }, [onCancel]);
 
   const handleMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
+    (e: MouseEvent) => {
       isDragging.current = true;
       startX.current = e.clientX;
       startY.current = e.clientY;
       currentX.current = e.clientX;
       currentY.current = e.clientY;
       redraw();
+
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!isDragging.current) return;
+        currentX.current = ev.clientX;
+        currentY.current = ev.clientY;
+        redraw();
+      };
+
+      const onMouseUp = () => {
+        if (!isDragging.current) return;
+        isDragging.current = false;
+        const cw = canvasRef.current?.width ?? window.innerWidth;
+        const ch = canvasRef.current?.height ?? window.innerHeight;
+        const box = getSelectionBox(cw, ch);
+        if (box.width >= MIN_SELECTION && box.height >= MIN_SELECTION) {
+          onSelected(box);
+        }
+        window.removeEventListener("mousemove", onMouseMove);
+        window.removeEventListener("mouseup", onMouseUp);
+      };
+
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
     },
-    [redraw],
+    [redraw, getSelectionBox, onSelected],
   );
-
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!isDragging.current) return;
-      currentX.current = e.clientX;
-      currentY.current = e.clientY;
-      redraw();
-    },
-    [redraw],
-  );
-
-  const handleMouseUp = useCallback(() => {
-    if (!isDragging.current) return;
-    isDragging.current = false;
-
-    const cw = canvasRef.current?.width ?? window.innerWidth;
-    const ch = canvasRef.current?.height ?? window.innerHeight;
-    const box = getSelectionBox(cw, ch);
-
-    if (box.width >= MIN_SELECTION && box.height >= MIN_SELECTION) {
-      onSelected(box);
-    }
-  }, [getSelectionBox, onSelected]);
 
   useEffect(() => {
-    window.addEventListener("mouseup", handleMouseUp);
-    return () => window.removeEventListener("mouseup", handleMouseUp);
-  }, [handleMouseUp]);
+    window.addEventListener("mousedown", handleMouseDown);
+    return () => window.removeEventListener("mousedown", handleMouseDown);
+  }, [handleMouseDown]);
 
   return (
     <canvas
@@ -160,8 +160,6 @@ export default function RegionSelector({
         cursor: "crosshair",
         display: "block",
       }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
     />
   );
 }

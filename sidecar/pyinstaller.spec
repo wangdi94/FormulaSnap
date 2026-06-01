@@ -12,6 +12,21 @@ import sys
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
+# Platform-aware extra binaries (Windows: bundle OpenSSL DLLs)
+# ---------------------------------------------------------------------------
+_extra_binaries = []
+if sys.platform == "win32":
+    python_dll_dir = Path(sys.base_prefix) / "DLLs"
+    for dll_name in [
+        "libcrypto-3.dll", "libssl-3.dll",
+        "libcrypto-1_1.dll", "libssl-1_1.dll",
+        "libcrypto-3-x64.dll", "libssl-3-x64.dll",
+    ]:
+        dll_path = python_dll_dir / dll_name
+        if dll_path.exists():
+            _extra_binaries.append((str(dll_path), "."))
+
+# ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 ROOT = Path(SPECPATH)  # noqa: F821 — PyInstaller injects SPECPATH
@@ -22,7 +37,7 @@ ROOT = Path(SPECPATH)  # noqa: F821 — PyInstaller injects SPECPATH
 a = Analysis(
     [str(ROOT / "sidecar" / "main.py")],
     pathex=[str(ROOT)],
-    binaries=[],
+    binaries=_extra_binaries,
     datas=[],
     hiddenimports=[
         # --- Core dependencies ---
