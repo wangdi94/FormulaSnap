@@ -5,6 +5,7 @@ import {
   callOcr,
   healthCheck,
   validateConfig,
+  initSidecarPort,
   type StatsResponse,
   type OcrRequest,
   type OcrResponse,
@@ -189,6 +190,11 @@ describe('sidecarClient 导出函数', () => {
   it('validateConfig 是函数，参数数量为 1', () => {
     expect(typeof validateConfig).toBe('function');
     expect(validateConfig.length).toBe(1);
+  });
+
+  it('initSidecarPort 是函数，参数数量为 0', () => {
+    expect(typeof initSidecarPort).toBe('function');
+    expect(initSidecarPort.length).toBe(0);
   });
 });
 

@@ -1,7 +1,7 @@
 """Tests for Claude Vision OCR engine."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 from sidecar.ocr_engines.claude_engine import ClaudeEngine
 from sidecar.ocr_engines.interface import (
@@ -57,8 +57,10 @@ class TestClaudeEngine:
     async def test_recognize_success(self, mock_anthropic):
         """Successful OCR returns OcrResult with correct fields."""
         mock_client = MagicMock()
-        mock_anthropic.Anthropic.return_value = mock_client
-        mock_client.messages.create.return_value = _mock_anthropic_response("$E = mc^2$")
+        mock_anthropic.AsyncAnthropic.return_value = mock_client
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response("$E = mc^2$")
+        )
 
         result = await self.engine.recognize(b"fake_image", OcrOptions())
 
@@ -76,9 +78,9 @@ class TestClaudeEngine:
     async def test_recognize_strips_markdown(self, mock_anthropic):
         """Response wrapped in markdown fences is cleaned."""
         mock_client = MagicMock()
-        mock_anthropic.Anthropic.return_value = mock_client
-        mock_client.messages.create.return_value = _mock_anthropic_response(
-            "```latex\n\\frac{a}{b}\n```"
+        mock_anthropic.AsyncAnthropic.return_value = mock_client
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response("```latex\n\\frac{a}{b}\n```")
         )
 
         result = await self.engine.recognize(b"fake_image", OcrOptions())
@@ -92,11 +94,11 @@ class TestClaudeEngine:
     async def test_recognize_authentication_error(self, mock_anthropic):
         """AnthropicAuthenticationError is mapped to ApiKeyError."""
         mock_client = MagicMock()
-        mock_anthropic.Anthropic.return_value = mock_client
+        mock_anthropic.AsyncAnthropic.return_value = mock_client
 
         auth_err = type("AuthenticationError", (Exception,), {})
         mock_anthropic.AuthenticationError = auth_err
-        mock_client.messages.create.side_effect = auth_err("bad key")
+        mock_client.messages.create = AsyncMock(side_effect=auth_err("bad key"))
 
         # Re-patch the module-level alias
         import sidecar.ocr_engines.claude_engine as mod
@@ -112,11 +114,11 @@ class TestClaudeEngine:
     async def test_recognize_rate_limit_error(self, mock_anthropic):
         """Anthropic RateLimitError is mapped to ocr RateLimitError."""
         mock_client = MagicMock()
-        mock_anthropic.Anthropic.return_value = mock_client
+        mock_anthropic.AsyncAnthropic.return_value = mock_client
 
         rate_err = type("RateLimitError", (Exception,), {})
         mock_anthropic.RateLimitError = rate_err
-        mock_client.messages.create.side_effect = rate_err("rate limited")
+        mock_client.messages.create = AsyncMock(side_effect=rate_err("rate limited"))
 
         import sidecar.ocr_engines.claude_engine as mod
         original = mod._RateLimitError
@@ -131,11 +133,11 @@ class TestClaudeEngine:
     async def test_recognize_connection_error(self, mock_anthropic):
         """Anthropic APIConnectionError is mapped to NetworkError."""
         mock_client = MagicMock()
-        mock_anthropic.Anthropic.return_value = mock_client
+        mock_anthropic.AsyncAnthropic.return_value = mock_client
 
         conn_err = type("APIConnectionError", (Exception,), {})
         mock_anthropic.APIConnectionError = conn_err
-        mock_client.messages.create.side_effect = conn_err("connection failed")
+        mock_client.messages.create = AsyncMock(side_effect=conn_err("connection failed"))
 
         import sidecar.ocr_engines.claude_engine as mod
         original = mod._APIConnectionError

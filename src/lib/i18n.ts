@@ -28,6 +28,12 @@ export function getLang(): Lang {
   return detectLang();
 }
 
+/** 将语言代码映射为 Intl 使用的 locale 字符串 */
+export function getLocale(): string {
+  const lang = getLang();
+  return lang === 'zh' ? 'zh-CN' : 'en-US';
+}
+
 export function setLang(lang: Lang): void {
   localStorage.setItem('language', lang);
 }

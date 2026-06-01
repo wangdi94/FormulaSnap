@@ -4,6 +4,10 @@ import { ToastProvider, ToastContext } from '../components/Toast';
 import { useContext } from 'react';
 import type { ReactNode } from 'react';
 
+vi.mock('../lib/i18n', () => ({
+  t: (key: string) => key,
+}));
+
 // Consumer to trigger toasts through context
 let triggerToast: ((type: 'success' | 'warning' | 'error', message: string) => void) | null = null;
 
@@ -41,9 +45,9 @@ describe('ToastProvider', () => {
   it('通过 context 添加成功 toast', () => {
     renderWithProvider(<div />);
     act(() => {
-      triggerToast?.('success', '操作成功！');
+      triggerToast?.('success', 'Operation successful!');
     });
-    expect(screen.getByText('操作成功！')).toBeInTheDocument();
+    expect(screen.getByText('Operation successful!')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toBeInTheDocument();
     // Should have success icon (a checkmark path)
     const svg = document.querySelector('svg');
@@ -53,55 +57,55 @@ describe('ToastProvider', () => {
   it('添加 warning toast', () => {
     renderWithProvider(<div />);
     act(() => {
-      triggerToast?.('warning', '注意：配置未保存');
+      triggerToast?.('warning', 'Warning: config not saved');
     });
-    expect(screen.getByText('注意：配置未保存')).toBeInTheDocument();
+    expect(screen.getByText('Warning: config not saved')).toBeInTheDocument();
   });
 
   it('添加 error toast', () => {
     renderWithProvider(<div />);
     act(() => {
-      triggerToast?.('error', '请求失败');
+      triggerToast?.('error', 'Request failed');
     });
-    expect(screen.getByText('请求失败')).toBeInTheDocument();
+    expect(screen.getByText('Request failed')).toBeInTheDocument();
   });
 
   it('toast 有关闭按钮可手动关闭', () => {
     renderWithProvider(<div />);
     act(() => {
-      triggerToast?.('success', '可关闭');
+      triggerToast?.('success', 'Dismissible');
     });
-    expect(screen.getByText('可关闭')).toBeInTheDocument();
+    expect(screen.getByText('Dismissible')).toBeInTheDocument();
 
     // Click close button
-    const closeButton = screen.getByLabelText('关闭');
+    const closeButton = screen.getByLabelText('common.close');
     fireEvent.click(closeButton);
     // Toast should be removed
-    expect(screen.queryByText('可关闭')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dismissible')).not.toBeInTheDocument();
   });
 
   it('toast 在 duration 后自动消失', () => {
     renderWithProvider(<div />);
     act(() => {
-      triggerToast?.('success', '自动消失');
+      triggerToast?.('success', 'Auto dismiss');
     });
-    expect(screen.getByText('自动消失')).toBeInTheDocument();
+    expect(screen.getByText('Auto dismiss')).toBeInTheDocument();
 
     // Fast-forward past default duration (3000ms)
     act(() => {
       vi.advanceTimersByTime(3000);
     });
-    expect(screen.queryByText('自动消失')).not.toBeInTheDocument();
+    expect(screen.queryByText('Auto dismiss')).not.toBeInTheDocument();
   });
 
   it('支持多个同时显示的 toast', () => {
     renderWithProvider(<div />);
     act(() => {
-      triggerToast?.('success', '成功通知');
-      triggerToast?.('warning', '警告通知');
+      triggerToast?.('success', 'Success notification');
+      triggerToast?.('warning', 'Warning notification');
     });
-    expect(screen.getByText('成功通知')).toBeInTheDocument();
-    expect(screen.getByText('警告通知')).toBeInTheDocument();
+    expect(screen.getByText('Success notification')).toBeInTheDocument();
+    expect(screen.getByText('Warning notification')).toBeInTheDocument();
     // Should have 2 alerts
     expect(screen.getAllByRole('alert')).toHaveLength(2);
   });

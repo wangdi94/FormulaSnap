@@ -39,7 +39,7 @@ export default function SelectionPage() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        handleCancel();
+        handleCancel().catch(console.error);
       }
     };
     window.addEventListener("keydown", onKey);

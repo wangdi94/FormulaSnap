@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import type { HistoryEntry } from "../types/history";
 import { getBackendLabel } from "../lib/constants";
-import { t } from "../lib/i18n";
+import { t, getLocale } from "../lib/i18n";
 
 const PAGE_SIZE = 20;
 
@@ -36,7 +36,7 @@ function formatTime(iso: string): string {
     if (diffHr < 24) return t('history.time.hours_ago', { n: diffHr });
     if (diffDay < 7) return t('history.time.days_ago', { n: diffDay });
 
-    return d.toLocaleDateString("zh-CN", {
+    return d.toLocaleDateString(getLocale(), {
       month: "2-digit",
       day: "2-digit",
       hour: "2-digit",
@@ -63,7 +63,7 @@ export default function HistoryPage() {
   const [page, setPage] = useState(0);
   const [isLastPage, setIsLastPage] = useState(false);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isCancelledRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   /* ── debounce 搜索词 ── */
   useEffect(() => {
@@ -79,31 +79,34 @@ export default function HistoryPage() {
 
   /* ── 加载数据 ── */
   const loadEntries = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
-    isCancelledRef.current = false;
     try {
       let results: HistoryEntry[];
       if (debouncedQuery) {
         results = await invoke<HistoryEntry[]>("search_history", {
           query: debouncedQuery,
         });
-        if (isCancelledRef.current) return;
+        if (controller.signal.aborted) return;
         setIsLastPage(true); // 搜索结果不分页
       } else {
         results = await invoke<HistoryEntry[]>("get_history", {
           limit: PAGE_SIZE,
           offset: page * PAGE_SIZE,
         });
-        if (isCancelledRef.current) return;
+        if (controller.signal.aborted) return;
         setIsLastPage(results.length < PAGE_SIZE);
       }
       setEntries(results);
     } catch (e) {
-      if (isCancelledRef.current) return;
+      if (controller.signal.aborted) return;
       console.error("Failed to load history:", e);
       setEntries([]);
     } finally {
-      if (!isCancelledRef.current) {
+      if (!controller.signal.aborted) {
         setLoading(false);
       }
     }
@@ -112,7 +115,7 @@ export default function HistoryPage() {
   useEffect(() => {
     loadEntries();
     return () => {
-      isCancelledRef.current = true;
+      abortRef.current?.abort();
     };
   }, [loadEntries]);
 

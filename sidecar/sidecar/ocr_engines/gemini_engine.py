@@ -133,7 +133,7 @@ class GeminiEngine(LlmProvider):
                 data=effective_image, mime_type=mime_type
             )
 
-            response = client.models.generate_content(
+            response = await client.aio.models.generate_content(
                 model=GEMINI_MODEL,
                 contents=[
                     image_part,
@@ -200,3 +200,11 @@ class GeminiEngine(LlmProvider):
     def get_rate_limit_status(self) -> Optional[RateLimitStatus]:
         """Gemini SDK does not expose rate limit info."""
         return None
+
+    async def aclose(self) -> None:
+        """Close the client and release resources."""
+        if self._client is not None:
+            close_fn = getattr(self._client, "close", None)
+            if close_fn is not None:
+                close_fn()
+            self._client = None

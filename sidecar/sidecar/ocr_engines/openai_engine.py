@@ -12,6 +12,7 @@ from typing import Optional
 
 try:
     import openai
+    from openai import AsyncOpenAI
 
     OPENAI_AVAILABLE = True
     _AuthenticationError = openai.AuthenticationError
@@ -19,6 +20,7 @@ try:
     _APIConnectionError = openai.APIConnectionError
 except ImportError:
     openai = None  # type: ignore[assignment]
+    AsyncOpenAI = None  # type: ignore[assignment,misc]
     OPENAI_AVAILABLE = False
     _AuthenticationError = Exception
     _RateLimitError = Exception
@@ -48,6 +50,7 @@ class OpenAIEngine(LlmProvider):
 
     def __init__(self, api_key: Optional[str] = None):
         self._api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
+        self._client = None  # AsyncOpenAI, 延迟初始化
 
     async def recognize(self, image: bytes, options: OcrOptions) -> OcrResult:
         """Recognize math in image via GPT-4o Vision."""
@@ -60,8 +63,11 @@ class OpenAIEngine(LlmProvider):
         start_time = time.time()
         image_base64 = base64.b64encode(image).decode()
 
+        if self._client is None:
+            self._client = AsyncOpenAI(api_key=self._api_key)
+
         try:
-            response = openai.chat.completions.create(
+            response = await self._client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": self._build_ocr_prompt()},
@@ -135,3 +141,9 @@ class OpenAIEngine(LlmProvider):
     def get_rate_limit_status(self) -> Optional[RateLimitStatus]:
         """OpenAI doesn't expose rate limit info via SDK."""
         return None
+
+    async def aclose(self) -> None:
+        """Close the async client and release resources."""
+        if self._client is not None:
+            await self._client.close()
+            self._client = None

@@ -29,5 +29,5 @@ packages = ["sidecar"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--timeout=30"
+addopts = "--timeout=30 --cov"
 asyncio_mode = "auto"

@@ -1,7 +1,7 @@
 """Tests for Gemini Vision OCR engine."""
 
 import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock, AsyncMock, PropertyMock
 from sidecar.ocr_engines.interface import (
     ApiKeyError,
     CostEstimate,
@@ -44,7 +44,7 @@ class TestGeminiEngine:
         mock_response.text = "$E = mc^2$"
         mock_response.usage_metadata.prompt_token_count = 500
         mock_response.usage_metadata.candidates_token_count = 265
-        mock_client.models.generate_content.return_value = mock_response
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
         result = await self.engine.recognize(b"small_image", OcrOptions())
 
@@ -69,7 +69,7 @@ class TestGeminiEngine:
         mock_response.text = "\\int_0^1 x^2 dx"
         mock_response.usage_metadata.prompt_token_count = 100
         mock_response.usage_metadata.candidates_token_count = 50
-        mock_client.models.generate_content.return_value = mock_response
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
         # Build a byte buffer > 7 MB
         large_image = b"\x89PNG\r\n" + b"\x00" * (8 * 1024 * 1024)
@@ -91,7 +91,7 @@ class TestGeminiEngine:
         mock_response.text = "$x$"
         mock_response.usage_metadata.prompt_token_count = 100
         mock_response.usage_metadata.candidates_token_count = 50
-        mock_client.models.generate_content.return_value = mock_response
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
         small_image = b"small" * 100  # 500 bytes
 
@@ -160,7 +160,7 @@ class TestGeminiEngine:
         """Network failures are wrapped as NetworkError."""
         mock_client = MagicMock()
         mock_genai.Client.return_value = mock_client
-        mock_client.models.generate_content.side_effect = ConnectionError("timeout")
+        mock_client.aio.models.generate_content = AsyncMock(side_effect=ConnectionError("timeout"))
 
         with pytest.raises(NetworkError):
             await self.engine.recognize(b"img", OcrOptions())
@@ -176,7 +176,7 @@ class TestGeminiEngine:
         mock_genai.Client.return_value = mock_client
 
         auth_err = type("ClientError", (Exception,), {"code": 401})
-        mock_client.models.generate_content.side_effect = auth_err("unauthorized")
+        mock_client.aio.models.generate_content = AsyncMock(side_effect=auth_err("unauthorized"))
 
         import sidecar.ocr_engines.gemini_engine as mod
         original = mod._ClientError
@@ -194,7 +194,7 @@ class TestGeminiEngine:
         mock_genai.Client.return_value = mock_client
 
         auth_err = type("ClientError", (Exception,), {"code": 403})
-        mock_client.models.generate_content.side_effect = auth_err("forbidden")
+        mock_client.aio.models.generate_content = AsyncMock(side_effect=auth_err("forbidden"))
 
         import sidecar.ocr_engines.gemini_engine as mod
         original = mod._ClientError
@@ -212,7 +212,7 @@ class TestGeminiEngine:
         mock_genai.Client.return_value = mock_client
 
         rate_err = type("ClientError", (Exception,), {"code": 429})
-        mock_client.models.generate_content.side_effect = rate_err("rate limited")
+        mock_client.aio.models.generate_content = AsyncMock(side_effect=rate_err("rate limited"))
 
         import sidecar.ocr_engines.gemini_engine as mod
         original = mod._ClientError
@@ -230,7 +230,7 @@ class TestGeminiEngine:
         mock_genai.Client.return_value = mock_client
 
         server_err = type("ServerError", (Exception,), {})
-        mock_client.models.generate_content.side_effect = server_err("internal error")
+        mock_client.aio.models.generate_content = AsyncMock(side_effect=server_err("internal error"))
 
         import sidecar.ocr_engines.gemini_engine as mod
         original = mod._ServerError
@@ -248,7 +248,7 @@ class TestGeminiEngine:
         mock_genai.Client.return_value = mock_client
 
         unknown_err = type("ClientError", (Exception,), {"code": 500})
-        mock_client.models.generate_content.side_effect = unknown_err("server error")
+        mock_client.aio.models.generate_content = AsyncMock(side_effect=unknown_err("server error"))
 
         import sidecar.ocr_engines.gemini_engine as mod
         original = mod._ClientError
@@ -264,7 +264,7 @@ class TestGeminiEngine:
         """TimeoutError is mapped to NetworkError."""
         mock_client = MagicMock()
         mock_genai.Client.return_value = mock_client
-        mock_client.models.generate_content.side_effect = TimeoutError("timed out")
+        mock_client.aio.models.generate_content = AsyncMock(side_effect=TimeoutError("timed out"))
 
         with pytest.raises(NetworkError, match="Gemini network error"):
             await self.engine.recognize(b"img", OcrOptions())
@@ -293,9 +293,9 @@ class TestDetectMimeType:
         jpeg_header = b"\xff\xd8\xff" + b"\x00" * 100
         assert detect_mime_type(jpeg_header) == "image/jpeg"
 
-    def test_detect_unknown_defaults_to_jpeg(self):
+    def test_detect_unknown_defaults_to_png(self):
         from sidecar.ocr_engines.image_utils import detect_mime_type
-        assert detect_mime_type(b"\x00" * 100) == "image/jpeg"
+        assert detect_mime_type(b"\x00" * 100) == "image/png"
 
 
 class TestCompressImage:

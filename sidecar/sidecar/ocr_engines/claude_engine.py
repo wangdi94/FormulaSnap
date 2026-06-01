@@ -62,11 +62,11 @@ class ClaudeEngine(LlmProvider):
         image_base64 = base64.b64encode(image).decode()
 
         if self._client is None:
-            self._client = anthropic.Anthropic(api_key=self._api_key)
+            self._client = anthropic.AsyncAnthropic(api_key=self._api_key)
         client = self._client
 
         try:
-            response = client.messages.create(
+            response = await client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=1024,
                 system=self._build_ocr_prompt(),
@@ -141,3 +141,9 @@ class ClaudeEngine(LlmProvider):
     def get_rate_limit_status(self) -> Optional[RateLimitStatus]:
         """Anthropic doesn't expose rate limit info via SDK."""
         return None
+
+    async def aclose(self) -> None:
+        """Close the async client and release resources."""
+        if self._client is not None:
+            await self._client.close()
+            self._client = None

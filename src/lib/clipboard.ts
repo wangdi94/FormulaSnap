@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { writeText, writeImage } from '@tauri-apps/plugin-clipboard-manager';
 
 export type CopyFormat = 'latex' | 'mathml' | 'png';
@@ -35,7 +36,13 @@ export async function copyToClipboard(text: string, format: CopyFormat): Promise
       container.appendChild(mathField);
 
       // 等待渲染完成
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(() => resolve(), 5000);
+        mathField.addEventListener('afterupdate', () => {
+          clearTimeout(timeout);
+          resolve();
+        }, { once: true });
+      });
 
       // 尝试通过 Canvas 导出为 PNG
       let objectUrl: string | undefined;
@@ -97,7 +104,7 @@ export function getFormatLabel(format: CopyFormat): string {
   const labels: Record<CopyFormat, string> = {
     latex: 'LaTeX',
     mathml: 'MathML',
-    png: 'PNG 图片',
+    png: t('clipboard.png_image'),
   };
   return labels[format];
 }

@@ -24,6 +24,10 @@ vi.mock('../lib/settings', () => ({
   }),
 }));
 
+vi.mock('../lib/i18n', () => ({
+  t: (key: string) => key,
+}));
+
 // Mock sidecarClient
 vi.mock('../lib/sidecarClient', () => ({
   callOcr: vi.fn(),
@@ -46,12 +50,12 @@ describe('CaptureFlow', () => {
 
   it('初始状态为 idle，显示快捷键提示', () => {
     render(<CaptureFlow />);
-    expect(screen.getByText(/Ctrl\+Shift\+C/)).toBeInTheDocument();
+    expect(screen.getByText('capture.hotkey_hint')).toBeInTheDocument();
   });
 
   it('显示"选择区域截图"按钮', () => {
     render(<CaptureFlow />);
-    expect(screen.getByText('选择区域截图')).toBeInTheDocument();
+    expect(screen.getByText('capture.select_region')).toBeInTheDocument();
   });
 
   it('通过 Tauri invoke 加载设置并设置默认 backend', async () => {

@@ -40,6 +40,18 @@ npx tsc --noEmit --skipLibCheck  # Type check
 - **`BACKEND_LABELS` centralized in `src/lib/constants.ts`** — was previously duplicated in 4 files.
 - Frontend bypasses Rust to call sidecar HTTP directly. If you need Rust-side logic for OCR calls, refactor the proxy path.
 
+## Rust 已知问题
+
+| # | 文件 | 严重性 | 问题 |
+|---|------|--------|------|
+| 1 | `src-tauri/src/logger.rs` | 中 | 无日志轮转。`FileLogger` 以 append 模式打开 `formulasnap.log`，从不轮转或清理。长时间运行后日志文件无限增长。 |
+| 2 | `src-tauri/src/sidecar.rs` | 中 | 孤儿进程。应用被 SIGKILL 或崩溃时，`stop_sidecar()` 不会执行，Python sidecar 进程残留。关闭方式是 `SIGKILL`（非优雅），无 HTTP graceful shutdown 端点。 |
+| 3 | `src-tauri/src/db.rs` | 低 | WAL 无显式 checkpoint。`PRAGMA journal_mode=WAL` 已启用，但从未调用 `PRAGMA wal_checkpoint`。依赖 SQLite 默认的自动 checkpoint（1000 页），可能导致 WAL 文件膨胀。 |
+| 4 | `src-tauri/src/history.rs` | 低 | `insert()` 是死代码。标记了 `#[allow(dead_code)]`，无对应的 Tauri command。前端无法通过正常路径写入历史记录，暗示写入逻辑在别处或缺失。 |
+| 5 | `src-tauri/src/permissions.rs` | 低 | `unsafe` FFI 缺少安全文档。`AXIsProcessTrusted()` 的 `unsafe` 块没有 `// SAFETY:` 注释，不符合 Rust 最佳实践。 |
+| 6 | `src-tauri/build.rs` | 低 | `unwrap()` 可能导致编译 panic。`std::env::current_dir().unwrap()` 和 `manifest.to_str().unwrap()` 在路径含非 UTF-8 字符时会 panic，错误信息不明确。 |
+| 7 | `src-tauri/Cargo.toml` | 低 | `crate-type` 过宽。`["staticlib", "cdylib", "rlib"]` 中仅 `rlib` 被测试和 Tauri 使用，`staticlib`/`cdylib` 增加编译时间但无实际用途。 |
+
 ## Conventions
 - pnpm for JS deps (not npm/yarn)
 - Tailwind 4 via Vite plugin (not PostCSS, no tailwind.config.js)

@@ -1,7 +1,7 @@
 """Tests for OpenAI Vision OCR engine."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 from sidecar.ocr_engines.openai_engine import OpenAIEngine
 from sidecar.ocr_engines.interface import (
@@ -59,10 +59,14 @@ class TestOpenAIEngine:
 
     # -- recognize success --------------------------------------------------
 
-    @patch("sidecar.ocr_engines.openai_engine.openai")
-    async def test_recognize_success(self, mock_openai):
+    @patch("sidecar.ocr_engines.openai_engine.AsyncOpenAI")
+    async def test_recognize_success(self, mock_async_openai):
         """Successful OCR returns OcrResult with correct fields."""
-        mock_openai.chat.completions.create.return_value = _mock_openai_response("$E = mc^2$")
+        mock_client = MagicMock()
+        mock_async_openai.return_value = mock_client
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_mock_openai_response("$E = mc^2$")
+        )
 
         result = await self.engine.recognize(b"fake_image", OcrOptions())
 
@@ -76,23 +80,27 @@ class TestOpenAIEngine:
 
     # -- empty choices → OcrError ------------------------------------------
 
-    @patch("sidecar.ocr_engines.openai_engine.openai")
-    async def test_recognize_empty_choices_raises(self, mock_openai):
+    @patch("sidecar.ocr_engines.openai_engine.AsyncOpenAI")
+    async def test_recognize_empty_choices_raises(self, mock_async_openai):
         """Empty choices list raises OcrError."""
+        mock_client = MagicMock()
+        mock_async_openai.return_value = mock_client
         response = MagicMock()
         response.choices = []
-        mock_openai.chat.completions.create.return_value = response
+        mock_client.chat.completions.create = AsyncMock(return_value=response)
 
         with pytest.raises(OcrError, match="OpenAI 返回空结果"):
             await self.engine.recognize(b"fake_image", OcrOptions())
 
     # -- markdown stripping -------------------------------------------------
 
-    @patch("sidecar.ocr_engines.openai_engine.openai")
-    async def test_recognize_strips_markdown(self, mock_openai):
+    @patch("sidecar.ocr_engines.openai_engine.AsyncOpenAI")
+    async def test_recognize_strips_markdown(self, mock_async_openai):
         """Response wrapped in markdown fences is cleaned."""
-        mock_openai.chat.completions.create.return_value = _mock_openai_response(
-            "```latex\n\\frac{a}{b}\n```"
+        mock_client = MagicMock()
+        mock_async_openai.return_value = mock_client
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_mock_openai_response("```latex\n\\frac{a}{b}\n```")
         )
 
         result = await self.engine.recognize(b"fake_image", OcrOptions())
@@ -102,12 +110,14 @@ class TestOpenAIEngine:
 
     # -- invalid API key ----------------------------------------------------
 
-    @patch("sidecar.ocr_engines.openai_engine.openai")
-    async def test_recognize_authentication_error(self, mock_openai):
+    @patch("sidecar.ocr_engines.openai_engine.AsyncOpenAI")
+    async def test_recognize_authentication_error(self, mock_async_openai):
         """OpenAI AuthenticationError is mapped to ApiKeyError."""
+        mock_client = MagicMock()
+        mock_async_openai.return_value = mock_client
+
         auth_err = type("AuthenticationError", (Exception,), {})
-        mock_openai.AuthenticationError = auth_err
-        mock_openai.chat.completions.create.side_effect = auth_err("bad key")
+        mock_client.chat.completions.create = AsyncMock(side_effect=auth_err("bad key"))
 
         import sidecar.ocr_engines.openai_engine as mod
         original = mod._AuthenticationError
@@ -118,12 +128,14 @@ class TestOpenAIEngine:
 
         mod._AuthenticationError = original
 
-    @patch("sidecar.ocr_engines.openai_engine.openai")
-    async def test_recognize_rate_limit_error(self, mock_openai):
+    @patch("sidecar.ocr_engines.openai_engine.AsyncOpenAI")
+    async def test_recognize_rate_limit_error(self, mock_async_openai):
         """OpenAI RateLimitError is mapped to ocr RateLimitError."""
+        mock_client = MagicMock()
+        mock_async_openai.return_value = mock_client
+
         rate_err = type("RateLimitError", (Exception,), {})
-        mock_openai.RateLimitError = rate_err
-        mock_openai.chat.completions.create.side_effect = rate_err("rate limited")
+        mock_client.chat.completions.create = AsyncMock(side_effect=rate_err("rate limited"))
 
         import sidecar.ocr_engines.openai_engine as mod
         original = mod._RateLimitError
@@ -134,12 +146,14 @@ class TestOpenAIEngine:
 
         mod._RateLimitError = original
 
-    @patch("sidecar.ocr_engines.openai_engine.openai")
-    async def test_recognize_connection_error(self, mock_openai):
+    @patch("sidecar.ocr_engines.openai_engine.AsyncOpenAI")
+    async def test_recognize_connection_error(self, mock_async_openai):
         """OpenAI APIConnectionError is mapped to NetworkError."""
+        mock_client = MagicMock()
+        mock_async_openai.return_value = mock_client
+
         conn_err = type("APIConnectionError", (Exception,), {})
-        mock_openai.APIConnectionError = conn_err
-        mock_openai.chat.completions.create.side_effect = conn_err("connection failed")
+        mock_client.chat.completions.create = AsyncMock(side_effect=conn_err("connection failed"))
 
         import sidecar.ocr_engines.openai_engine as mod
         original = mod._APIConnectionError

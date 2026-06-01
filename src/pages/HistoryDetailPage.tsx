@@ -4,7 +4,7 @@ import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import type { HistoryEntry } from "../types/history";
 import { copyToClipboard, type CopyFormat } from "../lib/clipboard";
 import { getBackendLabel } from "../lib/constants";
-import { t } from "../lib/i18n";
+import { t, getLocale } from "../lib/i18n";
 import FormulaPreview from "../components/FormulaPreview";
 
 type CopyState = null | "copying" | "copied" | "error";
@@ -221,7 +221,7 @@ export default function HistoryDetailPage() {
 
           <div className="text-gray-500 dark:text-gray-400">{t('history.created_at')}</div>
           <div className="text-gray-900 dark:text-gray-100 font-medium">
-            {new Date(entry.created_at).toLocaleString("zh-CN")}
+            {new Date(entry.created_at).toLocaleString(getLocale())}
           </div>
 
           <div className="text-gray-500 dark:text-gray-400">{t('history.latex_label')}</div>

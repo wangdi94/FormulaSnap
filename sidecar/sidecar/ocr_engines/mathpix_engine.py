@@ -43,7 +43,7 @@ class MathpixEngine:
     ) -> None:
         self._app_id = app_id or os.environ.get("MATHPIX_APP_ID", "")
         self._app_key = app_key or os.environ.get("MATHPIX_APP_KEY", "")
-        self._client: httpx.AsyncClient = httpx.AsyncClient(timeout=30.0)
+        self._client: Optional[httpx.AsyncClient] = httpx.AsyncClient(timeout=30.0)
 
     # ------------------------------------------------------------------
     # OcrBackend protocol methods
@@ -83,6 +83,9 @@ class MathpixEngine:
                 "include_latex": True,
             },
         }
+
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=30.0)
 
         try:
             response = await self._client.post(
@@ -154,3 +157,9 @@ class MathpixEngine:
     def get_rate_limit_status(self) -> Optional[RateLimitStatus]:
         """Return rate-limit information (Mathpix does not expose this in advance)."""
         return None
+
+    async def aclose(self) -> None:
+        """Close the async HTTP client and release resources."""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None

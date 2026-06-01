@@ -5,9 +5,8 @@
 ## Overview
 Tests for OCR sidecar: engine implementations, manager routing, FastAPI endpoints, response parsing.
 
-## Structure (9 files)
+## Structure (8 files)
 - `test_interface.py` — Dataclass + error hierarchy contract
-- `test_manager.py` — EngineManager routing, circuit breaker, fallback (436 lines, largest)
 - `test_server.py` — FastAPI TestClient endpoint tests
 - `test_cost_tracker.py` — Rate limiting + KeyManager CRUD
 - `test_response_parser.py` — LaTeX validation, markdown cleaning, dangerous command detection
@@ -33,7 +32,6 @@ Tests for OCR sidecar: engine implementations, manager routing, FastAPI endpoint
 ## Running
 ```bash
 pytest                                    # All tests (pytest.ini points here)
-pytest sidecar/tests/test_manager.py -v   # Single file
 pytest -k "test_name" -v                  # Single test
 ```
 - 30s timeout per test (configured in pytest.ini)

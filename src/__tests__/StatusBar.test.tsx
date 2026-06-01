@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import StatusBar from '../components/StatusBar';
 
+vi.mock('../lib/i18n', () => ({
+  t: (key: string) => key,
+}));
+
 // Mock the settings module which uses Tauri invoke
 vi.mock('../lib/settings', () => ({
   loadSettings: vi.fn().mockResolvedValue({
@@ -22,13 +26,13 @@ describe('StatusBar', () => {
   it('渲染就绪状态指示器', async () => {
     render(<StatusBar />);
     // Status indicator dot + "就绪" text
-    expect(await screen.findByText('就绪')).toBeInTheDocument();
+    expect(await screen.findByText('status.ready')).toBeInTheDocument();
   });
 
   it('渲染后端标签（默认 pix2text）', async () => {
     render(<StatusBar />);
     // Pix2Text (本地) is the label for pix2text backend
-    expect(await screen.findByText('Pix2Text（本地）')).toBeInTheDocument();
+    expect(await screen.findByText('backend.pix2text')).toBeInTheDocument();
   });
 
   it('后端标签动态变化（当设置中 default_backend 改变时）', async () => {
@@ -43,7 +47,7 @@ describe('StatusBar', () => {
     });
 
     render(<StatusBar />);
-    expect(await screen.findByText('OpenAI GPT-4o')).toBeInTheDocument();
+    expect(await screen.findByText('backend.openai')).toBeInTheDocument();
   });
 
   it('渲染 footer 元素', async () => {

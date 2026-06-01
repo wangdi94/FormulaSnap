@@ -47,11 +47,15 @@ export default function CaptureFlow() {
   const [result, setResult] = useState<OcrResponse | null>(null);
   const [error, setError] = useState<FlowError | null>(null);
   const [backend, setBackend] = useState<OcrBackend | 'auto'>("pix2text");
+  const [hotkey, setHotkey] = useState<string>("Ctrl+Shift+C");
   const ocrAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     loadSettings()
-      .then((s) => setBackend(s.default_backend))
+      .then((s) => {
+        setBackend(s.default_backend);
+        setHotkey(s.hotkey);
+      })
       .catch((e) => console.warn("Failed to load backend setting:", e));
   }, []);
 
@@ -164,7 +168,7 @@ export default function CaptureFlow() {
         <div className="flex flex-col items-center space-y-4 py-12">
           <div className="p-12 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
             <p className="text-gray-400 dark:text-gray-500 text-center">
-              {t('capture.hotkey_hint', { hotkey: 'Ctrl+Shift+C' })}
+              {t('capture.hotkey_hint', { hotkey })}
             </p>
           </div>
           <button

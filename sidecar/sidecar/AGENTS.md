@@ -12,7 +12,7 @@ CORS middleware allows localhost:1420 and tauri://localhost.
 
 `server.py` defines `register_engine()` and `_engines` dict for `/api/ocr`. **Called by `main.py` at startup** via `_register_engines()` — registers all 5 engines.
 
-Real engine logic lives in `EngineManager` (ocr_engines/manager.py), which has its own `_build_default_engines()`. These two registries are **separate** but both wired.
+`ocr_engines/manager.py` only contains a `CircuitBreaker` class (per-engine failure tracking, auto-recovery). It does **not** contain engine routing or fallback logic — each engine file (`pix2text.py`, `mathpix.py`, `llm_base.py`, etc.) implements the `OcrBackend` protocol independently, and registration happens in `server.py` via `register_engine()`.
 
 Tests bypass this by `@patch("sidecar.api.server.get_engine")`.
 
