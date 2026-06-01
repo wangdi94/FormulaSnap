@@ -81,7 +81,8 @@ pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
         }
     });
 
-    let mut guard = match app.state::<SidecarProcess>().health_handle.lock() {
+    let state = app.state::<SidecarProcess>();
+    let mut guard = match state.health_handle.lock() {
         Ok(guard) => guard,
         Err(poisoned) => {
             log::error!("SidecarProcess health_handle mutex 已中毒，使用内部锁继续");
