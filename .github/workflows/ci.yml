@@ -93,6 +93,18 @@ jobs:
             -v "${{ github.workspace }}:${{ github.workspace }}" \
             -w "${{ github.workspace }}" \
             rhysd/actionlint:latest -color
+      - name: Verify critical action references
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "::group::Verify tauri-apps/tauri-action@v0.6 tag exists"
+          if gh api repos/tauri-apps/tauri-action/git/ref/tags/v0.6 --jq .ref > /dev/null 2>&1; then
+            echo "✅ tauri-apps/tauri-action@v0.6 tag confirmed"
+          else
+            echo "::error::tauri-apps/tauri-action@v0.6 tag not found! CD will fail."
+            exit 1
+          fi
+          echo "::endgroup::"
 
   build-verification:
     strategy:
