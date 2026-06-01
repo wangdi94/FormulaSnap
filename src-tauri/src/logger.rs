@@ -55,11 +55,39 @@ impl Log for FileLogger {
     }
 }
 
+const MAX_LOG_SIZE: u64 = 10 * 1024 * 1024;
+const MAX_ROTATED_FILES: u32 = 3;
+
+/// Rotates log files: .log.3 deleted, .log.2→.log.3, .log.1→.log.2, .log→.log.1
+fn rotate_logs(log_path: &Path) {
+    let should_rotate = match std::fs::metadata(log_path) {
+        Ok(meta) => meta.len() > MAX_LOG_SIZE,
+        Err(_) => false,
+    };
+
+    if !should_rotate {
+        return;
+    }
+
+    let oldest = log_path.with_extension(format!("log.{}", MAX_ROTATED_FILES));
+    let _ = std::fs::remove_file(&oldest);
+
+    for i in (1..MAX_ROTATED_FILES).rev() {
+        let from = log_path.with_extension(format!("log.{}", i));
+        let to = log_path.with_extension(format!("log.{}", i + 1));
+        let _ = std::fs::rename(&from, &to);
+    }
+
+    let _ = std::fs::rename(log_path, log_path.with_extension("log.1"));
+}
+
 pub fn init_logger(app_data_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let logs_dir = app_data_dir.join("logs");
     std::fs::create_dir_all(&logs_dir).map_err(|e| format!("创建日志目录失败: {}", e))?;
 
     let log_path = logs_dir.join("formulasnap.log");
+    rotate_logs(&log_path);
+
     let file = OpenOptions::new()
         .create(true)
         .append(true)
