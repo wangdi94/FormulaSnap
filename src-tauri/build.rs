@@ -19,7 +19,7 @@ fn add_manifest() {
     static WINDOWS_MANIFEST_FILE: &str = "windows-app-manifest.xml";
 
     let manifest = std::env::current_dir()
-        .unwrap()
+        .expect("获取当前目录失败")
         .join(WINDOWS_MANIFEST_FILE);
 
     println!("cargo:rerun-if-changed={}", manifest.display());
@@ -27,6 +27,6 @@ fn add_manifest() {
     println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
     println!(
         "cargo:rustc-link-arg=/MANIFESTINPUT:{}",
-        manifest.to_str().unwrap()
+        manifest.to_str().expect("manifest路径包含非UTF-8字符")
     );
 }
