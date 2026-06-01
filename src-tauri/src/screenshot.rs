@@ -2,14 +2,13 @@ use image::DynamicImage;
 use xcap::Monitor;
 
 fn get_primary_monitor() -> Result<Monitor, Box<dyn std::error::Error>> {
-    let monitors = Monitor::all()?;
-    let monitor = monitors
-        .into_iter()
-        .find(|m| m.is_primary().unwrap_or(false))
-        // 注意：or_else 中需要重新调用 Monitor::all()，因为 monitors 已被 into_iter() 消耗
-        .or_else(|| Monitor::all().ok()?.into_iter().next())
-        .ok_or("No monitor found")?;
-    Ok(monitor)
+    let mut monitors = Monitor::all()?;
+    // 先找主显示器，没找到则取第一个（只调用一次 Monitor::all()）
+    if let Some(idx) = monitors.iter().position(|m| m.is_primary().unwrap_or(false)) {
+        Ok(monitors.swap_remove(idx))
+    } else {
+        monitors.into_iter().next().ok_or_else(|| "No monitor found".into())
+    }
 }
 
 /// Capture the entire primary monitor screen.
