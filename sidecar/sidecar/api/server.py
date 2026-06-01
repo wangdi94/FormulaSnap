@@ -7,6 +7,7 @@ import base64
 import binascii
 import logging
 import os
+import threading
 import time
 
 from sidecar.ocr_engines.interface import (
@@ -14,6 +15,7 @@ from sidecar.ocr_engines.interface import (
     ApiKeyError, RateLimitError, NetworkError,
 )
 from sidecar.ocr_engines.cost_tracker import cost_tracker, RateLimitExceeded
+from sidecar.ocr_engines.key_manager import key_manager
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +83,20 @@ class StatsResponse(BaseModel):
     remaining_today: int = 100
 
 
+class SaveKeyRequest(BaseModel):
+    backend: str
+    key: str = Field(..., min_length=1)
+
+
+class KeyStatusItem(BaseModel):
+    backend: str
+    configured: bool
+
+
+class KeysResponse(BaseModel):
+    keys: list[KeyStatusItem]
+
+
 # ---------------------------------------------------------------------------
 # Engine registry & stats
 # ---------------------------------------------------------------------------
@@ -108,6 +124,20 @@ def register_engine(backend: str, engine: OcrBackend) -> None:
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.post("/shutdown")
+async def shutdown():
+    """优雅关闭端点：返回 200 后触发进程退出。"""
+    logger.info("收到 shutdown 请求，准备退出...")
+
+    # 使用定时器延迟退出，确保 HTTP 响应先发送完成
+    def _do_exit():
+        logger.info("执行进程退出")
+        os._exit(0)
+
+    threading.Timer(0.5, _do_exit).start()
+    return {"status": "shutting_down"}
 
 
 @app.post("/api/ocr", response_model=OcrResponse)
@@ -190,3 +220,43 @@ async def validate_config_endpoint(request: ValidateConfigRequest):
         return {"valid": result.valid, "message": result.message}
     except (OcrError, ValueError) as e:
         return {"valid": False, "message": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# API Key management
+# ---------------------------------------------------------------------------
+
+# Mapping: frontend backend field → (key_manager service, key_manager key_name)
+_KEY_MAPPING: dict[str, tuple[str, str]] = {
+    "openai": ("openai", "api_key"),
+    "claude": ("claude", "api_key"),
+    "gemini": ("gemini", "api_key"),
+    "mathpix_app_id": ("mathpix", "app_id"),
+    "mathpix_app_key": ("mathpix", "app_key"),
+}
+
+
+@app.post("/api/keys")
+async def save_key_endpoint(request: SaveKeyRequest):
+    mapping = _KEY_MAPPING.get(request.backend)
+    if mapping is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown backend: {request.backend}",
+        )
+    service, key_name = mapping
+    try:
+        key_manager.set_key(service, key_name, request.key)
+        return {"status": "ok", "backend": request.backend}
+    except Exception as e:
+        logger.error("Failed to save key for %s: %s", request.backend, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/keys", response_model=KeysResponse)
+async def list_keys_endpoint():
+    results: list[KeyStatusItem] = []
+    for backend, (service, key_name) in _KEY_MAPPING.items():
+        value = key_manager.get_key(service, key_name)
+        results.append(KeyStatusItem(backend=backend, configured=value is not None))
+    return KeysResponse(keys=results)

@@ -33,6 +33,14 @@ def test_health_endpoint(client):
     assert response.json() == {"status": "ok"}
 
 
+def test_shutdown_endpoint(client):
+    with patch("sidecar.api.server.os._exit") as mock_exit:
+        response = client.post("/shutdown")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "shutting_down"
+
+
 def test_ocr_endpoint_valid_request(client):
     with patch("sidecar.api.server.get_engine") as mock_get_engine:
         mock_engine = MagicMock()

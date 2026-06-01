@@ -19,6 +19,33 @@ pub struct SidecarProcess {
     health_handle: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 
+impl Drop for SidecarProcess {
+    fn drop(&mut self) {
+        let url = format!("http://localhost:{}/shutdown", SIDECAR_PORT);
+        let shutdown_ok = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(2))
+            .build()
+            .ok()
+            .and_then(|client| client.post(&url).send().ok())
+            .is_some();
+
+        if shutdown_ok {
+            log::info!("已发送 shutdown 请求，等待 sidecar 退出...");
+            std::thread::sleep(Duration::from_millis(500));
+        }
+
+        if let Ok(mut guard) = self.child.lock() {
+            if let Some(child) = guard.take() {
+                if let Err(e) = child.kill() {
+                    log::error!("Drop: 关闭 sidecar 失败: {}", e);
+                } else {
+                    log::info!("Drop: sidecar 进程已关闭");
+                }
+            }
+        }
+    }
+}
+
 /// 启动 Python sidecar 子进程，并在后台线程中轮询健康检查。
 pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
     let sidecar_command = app
