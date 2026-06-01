@@ -20,6 +20,8 @@ extern "C" {
 pub fn check_accessibility() -> bool {
     #[cfg(target_os = "macos")]
     {
+        // SAFETY: AXIsProcessTrusted() 是 Apple 官方 API，返回 u8（0=false, 非0=true），
+        // 无副作用，线程安全，调用总是安全的。
         unsafe { AXIsProcessTrusted() != 0 }
     }
 
