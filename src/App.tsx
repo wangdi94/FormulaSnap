@@ -11,6 +11,7 @@ import HistoryDetailPage from "./pages/HistoryDetailPage";
 import SettingsPage from "./pages/SettingsPage";
 import SelectionPage from "./pages/SelectionPage";
 import { applyTheme, getTheme } from "./lib/theme";
+import { initSidecarPort } from "./lib/sidecarClient";
 import "./App.css";
 
 function NavigationListener() {
@@ -49,6 +50,7 @@ function App() {
   const location = useLocation();
 
   useEffect(() => {
+    initSidecarPort();
     applyTheme(getTheme());
 
     const mq = window.matchMedia("(prefers-color-scheme: dark)");

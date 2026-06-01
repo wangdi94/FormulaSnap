@@ -5,11 +5,35 @@
  * 所有 OCR 请求和状态查询都走这个客户端。
  */
 
+import { invoke } from '@tauri-apps/api/core';
+import { t } from './i18n';
 import type { OcrBackend } from '../types/ocr';
 export type { OcrBackend } from '../types/ocr';
 
-const SIDECAR_PORT = import.meta.env.VITE_SIDECAR_PORT ?? '8477';
-const SIDECAR_BASE_URL = `http://localhost:${SIDECAR_PORT}`;
+// ---------------------------------------------------------------------------
+// 端口初始化（运行时动态获取，支持 Tauri command + 环境变量 + 默认值 fallback）
+// ---------------------------------------------------------------------------
+
+let SIDECAR_PORT = '8477';
+let SIDECAR_BASE_URL = `http://localhost:${SIDECAR_PORT}`;
+
+/**
+ * 初始化 sidecar 端口（在应用启动时调用）
+ *
+ * 优先级：
+ * 1. Tauri command `get_sidecar_port`（桌面环境）
+ * 2. 环境变量 `VITE_SIDECAR_PORT`（开发模式）
+ * 3. 默认值 `8477`
+ */
+export async function initSidecarPort(): Promise<void> {
+  try {
+    const port = await invoke<number>('get_sidecar_port');
+    SIDECAR_PORT = String(port);
+  } catch {
+    SIDECAR_PORT = import.meta.env.VITE_SIDECAR_PORT ?? '8477';
+  }
+  SIDECAR_BASE_URL = `http://localhost:${SIDECAR_PORT}`;
+}
 
 // ---------------------------------------------------------------------------
 // 类型定义
@@ -92,7 +116,7 @@ async function request<T>(
       detail = await response.text();
     }
     throw new SidecarError(
-      `Sidecar 请求失败: ${response.status} ${response.statusText}`,
+      t('sidecar.request_failed', { status: response.status, statusText: response.statusText }),
       response.status,
       detail,
     );
