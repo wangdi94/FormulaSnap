@@ -78,6 +78,19 @@ fn open_selection_window(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn insert_history(
+    state: tauri::State<'_, DbConn>,
+    latex: String,
+    backend: String,
+    confidence: f64,
+    screenshot_path: Option<String>,
+) -> Result<i64, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    history::insert(&conn, &latex, &backend, confidence, screenshot_path.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn get_history(
     state: tauri::State<'_, DbConn>,
     limit: i64,
@@ -153,6 +166,7 @@ pub fn run() {
     builder
         .invoke_handler(tauri::generate_handler![
             get_history,
+            insert_history,
             get_history_by_id,
             delete_history,
             search_history,
