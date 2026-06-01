@@ -1,12 +1,13 @@
 import { Link, useLocation } from "react-router-dom";
+import { t } from "../lib/i18n";
 
 export default function Header() {
   const location = useLocation();
 
   const navItems = [
-    { path: "/", label: "截图" },
-    { path: "/history", label: "历史记录" },
-    { path: "/settings", label: "设置" },
+    { path: "/", label: t('nav.capture') },
+    { path: "/history", label: t('nav.history') },
+    { path: "/settings", label: t('nav.settings') },
   ];
 
   return (

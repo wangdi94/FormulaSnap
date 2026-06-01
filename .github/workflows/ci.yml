@@ -70,14 +70,7 @@ jobs:
           mkdir -p src-tauri/binaries
           touch src-tauri/binaries/formulasnap-sidecar-x86_64-pc-windows-msvc.exe
       - name: Run tests
-        if: runner.os != 'Windows'
         run: cargo test --lib
-        working-directory: src-tauri
-      # TODO: Windows 测试二进制因缺少 ComCtl32 v6 清单无法运行 (STATUS_ENTRYPOINT_NOT_FOUND)
-      # 当前测试都是平台无关的纯逻辑测试，编译验证已足够。长期应考虑创建独立测试 crate 或嵌入 manifest。
-      - name: Compile tests (Windows)
-        if: runner.os == 'Windows'
-        run: cargo test --lib --no-run
         working-directory: src-tauri
       - name: Clippy
         run: cargo clippy -- -D warnings

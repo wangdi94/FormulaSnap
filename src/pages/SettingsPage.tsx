@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AppSettings } from '../types/settings';
 import { loadSettings, saveSettings, resetSettings } from '../lib/settings';
 import { getStats, type StatsResponse } from '../lib/sidecarClient';
-import { setLang } from '../lib/i18n';
-import { BACKENDS } from '../lib/constants';
+import { setLang, t } from '../lib/i18n';
+import { getBackendOptions } from '../lib/constants';
 
 /* ─── API Key 字段定义 ─── */
 const API_KEY_FIELDS: {
@@ -21,7 +21,7 @@ const API_KEY_FIELDS: {
 
 /* ─── 快捷键辅助 ─── */
 function formatHotkey(hotkey: string): string {
-  return hotkey || '未设置';
+  return hotkey || t('settings.not_set');
 }
 
 function normalizeModifiers(e: KeyboardEvent): string[] {
@@ -84,7 +84,7 @@ export default function SettingsPage() {
       const result = await getStats();
       if (!controller.signal.aborted) {
         if (result === null) {
-          setStatsError('统计数据不可用');
+          setStatsError(t('settings.stats_unavailable'));
         } else {
           setStats(result);
         }
@@ -92,7 +92,7 @@ export default function SettingsPage() {
     } catch (e) {
       if (!controller.signal.aborted) {
         console.warn('Failed to load stats:', e);
-        setStatsError('统计数据不可用');
+        setStatsError(t('settings.stats_unavailable'));
       }
     } finally {
       clearTimeout(timeout);
@@ -172,11 +172,11 @@ export default function SettingsPage() {
     setSaveMsg(null);
     try {
       await saveSettings(settings);
-      setSaveMsg('设置已保存');
+      setSaveMsg(t('settings.saved'));
       if (saveMsgTimeoutRef.current) clearTimeout(saveMsgTimeoutRef.current);
       saveMsgTimeoutRef.current = setTimeout(() => setSaveMsg(null), 2500);
     } catch (e) {
-      setSaveMsg(`保存失败: ${e}`);
+      setSaveMsg(t('settings.save_failed', { error: String(e) }));
     } finally {
       setSaving(false);
     }
@@ -188,11 +188,11 @@ export default function SettingsPage() {
       <div className="flex items-center justify-center h-full" role="status" aria-live="polite">
         <div className="flex items-center gap-3 text-gray-400 dark:text-gray-500">
           <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <title>加载中</title>
+            <title>{t('common.loading')}</title>
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <span>加载设置中...</span>
+          <span>{t('settings.loading')}</span>
         </div>
       </div>
     );
@@ -202,14 +202,14 @@ export default function SettingsPage() {
     <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
       {/* ── 标题 ── */}
       <div>
-        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">设置</h2>
+        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">{t('settings.page_title')}</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          管理 API 密钥、识别后端和应用偏好
+          {t('settings.description')}
         </p>
       </div>
 
       {/* ━━━ 1. API Key 管理 ━━━ */}
-      <Section title="API Key 管理" description="配置各识别引擎的 API 凭证。密钥仅存储在本地，不会上传。">
+      <Section title={t('settings.api_key_management')} description={t('settings.api_key_description')}>
         <div className="space-y-4">
           {API_KEY_FIELDS.map(({ key, label, placeholder, link }) => (
             <div key={key}>
@@ -224,7 +224,7 @@ export default function SettingsPage() {
                     rel="noopener noreferrer"
                     className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
                   >
-                    获取密钥 ↗
+                    {t('settings.get_key')}
                   </a>
                 )}
               </div>
@@ -249,7 +249,7 @@ export default function SettingsPage() {
                   onClick={() => setShowKeys((prev) => ({ ...prev, [key]: !prev[key] }))}
                   className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600
                              dark:hover:text-gray-300 transition-colors"
-                  aria-label={showKeys[key] ? '隐藏密钥' : '显示密钥'}
+                  aria-label={showKeys[key] ? t('settings.hide_key') : t('settings.show_key')}
                 >
                   {showKeys[key] ? (
                     <EyeOffIcon />
@@ -264,10 +264,10 @@ export default function SettingsPage() {
       </Section>
 
       {/* ━━━ 2. 后端选择 ━━━ */}
-      <Section title="识别后端" description="选择默认的数学公式识别引擎。" icon="⚡">
+      <Section title={t('settings.recognition_backend')} description={t('settings.backend_description')} icon="⚡">
         <div>
           <label htmlFor="default-backend" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-            默认后端
+            {t('settings.default_backend')}
           </label>
           <select
             id="default-backend"
@@ -281,23 +281,23 @@ export default function SettingsPage() {
                        dark:focus:ring-blue-400 dark:focus:border-blue-400
                        transition-colors text-sm"
           >
-            {BACKENDS.map((b) => (
+            {getBackendOptions().map((b) => (
               <option key={b.value} value={b.value}>{b.label}</option>
             ))}
           </select>
           {settings.default_backend === 'auto' && (
             <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              自动模式将优先使用本地 Pix2Text，失败时回退到已配置的云端服务。
+              {t('settings.auto_mode_hint')}
             </p>
           )}
         </div>
       </Section>
 
       {/* ━━━ 3. 快捷键配置 ━━━ */}
-      <Section title="快捷键" description="自定义截图识别的全局快捷键。" icon="⌨️">
+      <Section title={t('settings.hotkey_section')} description={t('settings.hotkey_description')} icon="⌨️">
         <div>
           <label htmlFor="hotkey-display" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-            截图快捷键
+            {t('settings.capture_hotkey')}
           </label>
           <div className="flex items-center gap-3" ref={hotkeyRef}>
             <div
@@ -313,7 +313,7 @@ export default function SettingsPage() {
               {recording ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                  按下快捷键组合...
+                  {t('settings.press_hotkey')}
                 </span>
               ) : (
                 formatHotkey(settings.hotkey)
@@ -328,7 +328,7 @@ export default function SettingsPage() {
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
                 }`}
             >
-              {recording ? '取消' : '录制'}
+              {recording ? t('common.cancel') : t('settings.record')}
             </button>
             <button
               type="button"
@@ -338,23 +338,23 @@ export default function SettingsPage() {
                          dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600
                          transition-colors"
             >
-              重置
+              {t('settings.reset')}
             </button>
           </div>
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            默认：{navigator.userAgent.includes('Mac') ? 'Cmd+Shift+C' : 'Ctrl+Shift+C'}。需包含至少一个修饰键（Ctrl/Alt/Shift/Super）。
+            {t('settings.hotkey_default_hint', { hotkey: navigator.userAgent.includes('Mac') ? 'Cmd+Shift+C' : 'Ctrl+Shift+C' })}
           </p>
         </div>
       </Section>
 
       {/* ━━━ 4. 成本统计 ━━━ */}
-      <Section title="成本统计" description="本月 API 调用情况。" icon="📊">
+      <Section title={t('settings.cost_stats')} description={t('settings.cost_description')} icon="📊">
         {stats ? (
           <div className="grid grid-cols-3 gap-4">
-            <StatCard label="调用次数" value={stats.total_calls.toLocaleString()} unit="次" />
-            <StatCard label="总 Tokens" value={stats.total_tokens.toLocaleString()} unit="tokens" />
+            <StatCard label={t('settings.total_calls')} value={stats.total_calls.toLocaleString()} unit={t('settings.calls_unit')} />
+            <StatCard label={t('settings.total_tokens')} value={stats.total_tokens.toLocaleString()} unit="tokens" />
             <StatCard
-              label="预估成本"
+              label={t('settings.estimated_cost')}
               value={`$${stats.estimated_cost_usd.toFixed(2)}`}
               unit="USD"
               highlight={stats.estimated_cost_usd > 0}
@@ -368,20 +368,20 @@ export default function SettingsPage() {
               onClick={fetchStats}
               className="px-3 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
             >
-              重试
+              {t('common.retry')}
             </button>
           </div>
         ) : (
-          <div className="text-sm text-gray-400 dark:text-gray-500">加载统计中...</div>
+          <div className="text-sm text-gray-400 dark:text-gray-500">{t('settings.loading_stats')}</div>
         )}
       </Section>
 
       {/* ━━━ 5. 月度预算 ━━━ */}
-      <Section title="月度预算" description="设置每月 API 调用的费用上限。" icon="💰">
+      <Section title={t('settings.monthly_budget')} description={t('settings.budget_description')} icon="💰">
         <div>
           <div className="flex items-center justify-between mb-2">
             <label htmlFor="budget-slider" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              预算上限
+              {t('settings.budget_limit')}
             </label>
             <span className="text-sm font-mono font-semibold text-gray-900 dark:text-white">
               ${settings.monthly_budget_usd.toFixed(2)}
@@ -401,13 +401,13 @@ export default function SettingsPage() {
                        accent-blue-500 dark:accent-blue-400"
           />
           <div className="flex justify-between mt-1 text-xs text-gray-400 dark:text-gray-500">
-            <span>$0（禁用云端）</span>
-            <span>$100/月</span>
+            <span>{t('settings.budget_min')}</span>
+            <span>{t('settings.budget_max')}</span>
           </div>
           {stats && stats.estimated_cost_usd > 0 && settings.monthly_budget_usd > 0 && (
             <div className="mt-3">
               <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-                <span>已使用</span>
+                <span>{t('settings.used')}</span>
                 <span>{Math.min(100, (stats.estimated_cost_usd / settings.monthly_budget_usd) * 100).toFixed(1)}%</span>
               </div>
               <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -433,7 +433,7 @@ export default function SettingsPage() {
         <div className="flex items-center justify-between">
           <div className="text-sm">
             {saveMsg && (
-              <span className={`transition-opacity ${saveMsg.includes('失败') ? 'text-red-500' : 'text-green-600 dark:text-green-400'}`}>
+              <span className={`transition-opacity ${saveMsg.includes(t('settings.save_failed', { error: '' }).replace(': ', '')) ? 'text-red-500' : 'text-green-600 dark:text-green-400'}`}>
                 {saveMsg}
               </span>
             )}
@@ -442,17 +442,17 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={async () => {
-                if (window.confirm('确定要重置所有设置为默认值吗？')) {
+                if (window.confirm(t('settings.reset_confirm'))) {
                   const defaults = await resetSettings();
                   setSettings(defaults);
-                  setSaveMsg('已重置为默认设置');
+                  setSaveMsg(t('settings.reset_done'));
                   setTimeout(() => setSaveMsg(null), 2500);
                 }
               }}
               className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400
                          hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
             >
-              重置默认
+              {t('settings.reset_default')}
             </button>
             <button
               type="button"
@@ -467,14 +467,14 @@ export default function SettingsPage() {
               {saving ? (
                 <span className="flex items-center gap-2">
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <title>保存中</title>
+                    <title>{t('settings.saving')}</title>
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  保存中...
+                  {t('settings.saving')}
                 </span>
               ) : (
-                '保存设置'
+                t('settings.save_settings')
               )}
             </button>
           </div>
@@ -538,7 +538,7 @@ function StatCard({
 function EyeIcon() {
   return (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-      <title>显示</title>
+      <title>{t('settings.show_key')}</title>
       <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
     </svg>
@@ -548,7 +548,7 @@ function EyeIcon() {
 function EyeOffIcon() {
   return (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-      <title>隐藏</title>
+      <title>{t('settings.hide_key')}</title>
       <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
     </svg>
   );

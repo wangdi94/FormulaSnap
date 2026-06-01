@@ -1,5 +1,6 @@
 import { createContext, useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { t } from "../lib/i18n";
 
 export type ToastType = "success" | "warning" | "error";
 
@@ -13,7 +14,7 @@ interface ToastContextValue {
   toast: (type: ToastType, message: string) => void;
 }
 
-const ToastContext = createContext<ToastContextValue | null>(null);
+export const ToastContext = createContext<ToastContextValue | null>(null);
 
 interface ToastProviderProps {
   children: ReactNode;
@@ -87,7 +88,7 @@ function ToastIcon({ type }: { type: ToastType }) {
         stroke="currentColor"
         aria-hidden="true"
       >
-        <title>成功</title>
+        <title>{t('toast.success')}</title>
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -106,7 +107,7 @@ function ToastIcon({ type }: { type: ToastType }) {
       stroke="currentColor"
       aria-hidden="true"
     >
-      <title>{type === "warning" ? "警告" : "错误"}</title>
+      <title>{type === "warning" ? t('toast.warning') : t('toast.error')}</title>
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -143,7 +144,7 @@ function ToastItem({ toast, duration, onDismiss }: ToastItemProps) {
         type="button"
         onClick={handleDismiss}
         className={`shrink-0 ${styles.text} hover:opacity-70 transition-opacity`}
-        aria-label="关闭"
+        aria-label={t('common.close')}
       >
         <svg
           className="w-4 h-4"

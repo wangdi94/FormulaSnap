@@ -3,7 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import type { HistoryEntry } from "../types/history";
 import { copyToClipboard, type CopyFormat } from "../lib/clipboard";
-import { BACKEND_LABELS } from "../lib/constants";
+import { getBackendLabel } from "../lib/constants";
+import { t } from "../lib/i18n";
 import FormulaPreview from "../components/FormulaPreview";
 
 type CopyState = null | "copying" | "copied" | "error";
@@ -43,10 +44,10 @@ export default function HistoryDetailPage() {
         if (result) {
           setEntry(result);
         } else {
-          setError("记录不存在");
+          setError(t('history.record_not_found'));
         }
       } catch (e) {
-        setError(`加载失败: ${e}`);
+        setError(t('history.load_failed', { error: String(e) }));
       } finally {
         setLoading(false);
       }
@@ -80,7 +81,7 @@ export default function HistoryDetailPage() {
   /* ── 删除操作 ── */
   const handleDelete = useCallback(async () => {
     if (!entry) return;
-    const confirmed = window.confirm("确定要删除这条记录吗？此操作不可撤销。");
+    const confirmed = window.confirm(t('history.delete_confirm'));
     if (!confirmed) return;
 
     setDeleting(true);
@@ -89,7 +90,7 @@ export default function HistoryDetailPage() {
       navigate("/history", { replace: true });
     } catch (e) {
       console.error("Delete failed:", e);
-      alert(`删除失败: ${e}`);
+      alert(t('history.delete_failed', { error: String(e) }));
       setDeleting(false);
     }
   }, [entry, navigate]);
@@ -109,7 +110,7 @@ export default function HistoryDetailPage() {
             fill="none"
             aria-hidden="true"
           >
-            <title>加载中</title>
+            <title>{t('common.loading')}</title>
             <circle
               className="opacity-25"
               cx="12"
@@ -124,7 +125,7 @@ export default function HistoryDetailPage() {
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
             />
           </svg>
-          <span>加载中...</span>
+          <span>{t('common.loading')}</span>
         </div>
       </div>
     );
@@ -141,7 +142,7 @@ export default function HistoryDetailPage() {
                      hover:text-gray-700 dark:hover:text-gray-200 transition-colors mb-6"
         >
           <ArrowLeftIcon className="w-4 h-4" />
-          返回列表
+          {t('history.back_to_list')}
         </button>
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
           <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
@@ -149,10 +150,10 @@ export default function HistoryDetailPage() {
           </div>
           <div className="text-center space-y-1">
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              {error ?? "记录不存在"}
+              {error ?? t('history.record_not_found')}
             </p>
             <p className="text-xs text-gray-400 dark:text-gray-500">
-              该记录可能已被删除
+              {t('history.may_be_deleted')}
             </p>
           </div>
         </div>
@@ -171,23 +172,23 @@ export default function HistoryDetailPage() {
                    hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
       >
         <ArrowLeftIcon className="w-4 h-4" />
-        返回列表
+        {t('history.back_to_list')}
       </button>
 
       {/* 标题 */}
       <div>
         <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-          识别详情
+          {t('history.detail_title')}
         </h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          记录 #{entry.id}
+          {t('history.record_number', { id: entry.id })}
         </p>
       </div>
 
       {/* 公式渲染 */}
       <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
         <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">
-          公式预览
+          {t('history.formula_preview')}
         </h3>
         <FormulaPreview latex={entry.latex} readOnly />
       </section>
@@ -195,15 +196,15 @@ export default function HistoryDetailPage() {
       {/* 元信息 */}
       <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
         <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">
-          识别信息
+          {t('history.recognition_info')}
         </h3>
         <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-          <div className="text-gray-500 dark:text-gray-400">后端</div>
+          <div className="text-gray-500 dark:text-gray-400">{t('history.backend')}</div>
           <div className="text-gray-900 dark:text-gray-100 font-medium">
-            {BACKEND_LABELS[entry.backend] ?? entry.backend}
+            {getBackendLabel(entry.backend)}
           </div>
 
-          <div className="text-gray-500 dark:text-gray-400">置信度</div>
+          <div className="text-gray-500 dark:text-gray-400">{t('history.confidence')}</div>
           <div className="text-gray-900 dark:text-gray-100 font-medium">
             <span
               className={
@@ -218,12 +219,12 @@ export default function HistoryDetailPage() {
             </span>
           </div>
 
-          <div className="text-gray-500 dark:text-gray-400">创建时间</div>
+          <div className="text-gray-500 dark:text-gray-400">{t('history.created_at')}</div>
           <div className="text-gray-900 dark:text-gray-100 font-medium">
             {new Date(entry.created_at).toLocaleString("zh-CN")}
           </div>
 
-          <div className="text-gray-500 dark:text-gray-400">LaTeX</div>
+          <div className="text-gray-500 dark:text-gray-400">{t('history.latex_label')}</div>
           <div className="text-gray-900 dark:text-gray-100 font-mono text-xs break-all">
             {entry.latex}
           </div>
@@ -234,11 +235,11 @@ export default function HistoryDetailPage() {
       {screenshotUrl && (
         <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">
-            原始截图
+            {t('history.original_screenshot')}
           </h3>
           <img
             src={screenshotUrl}
-            alt="识别时的原始截图"
+            alt={t('history.screenshot_alt')}
             className="max-w-full max-h-64 object-contain rounded-lg border border-gray-200 dark:border-gray-700"
           />
         </section>
@@ -247,16 +248,16 @@ export default function HistoryDetailPage() {
       {/* 操作按钮 */}
       <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
         <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">
-          操作
+          {t('history.actions')}
         </h3>
         <div className="flex flex-wrap gap-3">
           <CopyButton
-            label="复制 LaTeX"
+            label={t('history.copy_latex')}
             state={copyState.latex}
             onClick={() => handleCopy("latex")}
           />
           <CopyButton
-            label="复制 MathML"
+            label={t('history.copy_mathml')}
             state={copyState.mathml}
             onClick={() => handleCopy("mathml")}
           />
@@ -277,7 +278,7 @@ export default function HistoryDetailPage() {
                   fill="none"
                   aria-hidden="true"
                 >
-                  <title>删除中</title>
+                  <title>{t('history.deleting')}</title>
                   <circle
                     className="opacity-25"
                     cx="12"
@@ -292,10 +293,10 @@ export default function HistoryDetailPage() {
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                   />
                 </svg>
-                删除中...
+                {t('history.deleting')}
               </span>
             ) : (
-              "删除记录"
+              t('history.delete_record')
             )}
           </button>
         </div>
@@ -340,7 +341,7 @@ function CopyButton({
             fill="none"
             aria-hidden="true"
           >
-            <title>复制中</title>
+            <title>{t('history.copying')}</title>
             <circle
               className="opacity-25"
               cx="12"
@@ -355,15 +356,15 @@ function CopyButton({
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
             />
           </svg>
-          复制中...
+          {t('history.copying')}
         </span>
       ) : isCopied ? (
         <span className="flex items-center gap-1">
           <CheckIcon className="w-4 h-4" />
-          已复制
+          {t('history.copied')}
         </span>
       ) : isError ? (
-        "复制失败"
+        t('history.copy_failed')
       ) : (
         label
       )}

@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { t } from "../lib/i18n";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -49,7 +50,7 @@ export default class ErrorBoundary extends Component<
               strokeWidth={1.5}
               aria-hidden="true"
             >
-              <title>错误</title>
+              <title>{t('error.title')}</title>
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -58,10 +59,10 @@ export default class ErrorBoundary extends Component<
             </svg>
           </div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            页面崩溃了
+            {t('error.page_crashed')}
           </h2>
           <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md">
-            抱歉，发生了意外错误。您可以尝试刷新页面或点击下方按钮重试。
+            {t('error.description')}
           </p>
           <div className="flex gap-3">
             <button
@@ -69,20 +70,20 @@ export default class ErrorBoundary extends Component<
               onClick={this.handleRetry}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
             >
-              重试
+              {t('common.retry')}
             </button>
             <button
               type="button"
               onClick={() => window.location.reload()}
               className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
             >
-              刷新页面
+              {t('error.refresh')}
             </button>
           </div>
           {this.state.error && (
             <details className="mt-6 text-left max-w-md w-full">
               <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-200">
-                错误详情
+                {t('error.details')}
               </summary>
               <pre className="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-md text-xs text-gray-700 dark:text-gray-300 overflow-auto">
                 {this.state.error.message}

@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import type { HistoryEntry } from "../types/history";
-import { BACKEND_LABELS } from "../lib/constants";
+import { getBackendLabel } from "../lib/constants";
+import { t } from "../lib/i18n";
 
 const PAGE_SIZE = 20;
 
@@ -30,10 +31,10 @@ function formatTime(iso: string): string {
     const diffHr = Math.floor(diffMs / 3600000);
     const diffDay = Math.floor(diffMs / 86400000);
 
-    if (diffMin < 1) return "刚刚";
-    if (diffMin < 60) return `${diffMin} 分钟前`;
-    if (diffHr < 24) return `${diffHr} 小时前`;
-    if (diffDay < 7) return `${diffDay} 天前`;
+    if (diffMin < 1) return t('history.time.just_now');
+    if (diffMin < 60) return t('history.time.minutes_ago', { n: diffMin });
+    if (diffHr < 24) return t('history.time.hours_ago', { n: diffHr });
+    if (diffDay < 7) return t('history.time.days_ago', { n: diffDay });
 
     return d.toLocaleDateString("zh-CN", {
       month: "2-digit",
@@ -121,10 +122,10 @@ export default function HistoryPage() {
       {/* 标题 */}
       <div>
         <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-          历史记录
+          {t('history.page_title')}
         </h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          查看过往的公式识别记录
+          {t('history.description')}
         </p>
       </div>
 
@@ -135,14 +136,14 @@ export default function HistoryPage() {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="搜索 LaTeX 公式..."
+          placeholder={t('history.search_placeholder')}
           className="w-full pl-9 pr-9 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg
                      bg-white dark:bg-gray-800 text-gray-900 dark:text-white
                      placeholder-gray-400 dark:placeholder-gray-500
                      focus:ring-2 focus:ring-blue-500 focus:border-blue-500
                      dark:focus:ring-blue-400 dark:focus:border-blue-400
                      transition-colors text-sm"
-          aria-label="搜索历史记录"
+          aria-label={t('history.search_aria')}
         />
         {searchQuery && (
           <button
@@ -150,7 +151,7 @@ export default function HistoryPage() {
             onClick={() => setSearchQuery("")}
             className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600
                        dark:hover:text-gray-300 transition-colors"
-            aria-label="清除搜索"
+            aria-label={t('history.clear_search_aria')}
           >
             <XIcon className="w-4 h-4" />
           </button>
@@ -160,7 +161,7 @@ export default function HistoryPage() {
       {/* 搜索状态提示 */}
       {debouncedQuery && !loading && (
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          搜索 "{debouncedQuery}" 找到 {entries.length} 条记录
+          {t('history.search_results', { query: debouncedQuery, count: entries.length })}
         </p>
       )}
 
@@ -174,7 +175,7 @@ export default function HistoryPage() {
               fill="none"
               aria-hidden="true"
             >
-              <title>加载中</title>
+              <title>{t('common.loading')}</title>
               <circle
                 className="opacity-25"
                 cx="12"
@@ -189,7 +190,7 @@ export default function HistoryPage() {
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
               />
             </svg>
-            <span>加载中...</span>
+            <span>{t('common.loading')}</span>
           </div>
         </div>
       ) : entries.length === 0 ? (
@@ -200,12 +201,12 @@ export default function HistoryPage() {
           </div>
           <div className="text-center space-y-1">
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              {debouncedQuery ? "未找到匹配的记录" : "暂无历史记录"}
+              {debouncedQuery ? t('history.no_match') : t('history.empty')}
             </p>
             <p className="text-xs text-gray-400 dark:text-gray-500">
               {debouncedQuery
-                ? "尝试其他关键词搜索"
-                : "使用截图识别功能后，记录会自动保存在这里"}
+                ? t('history.try_other_keywords')
+                : t('history.auto_save_hint')}
             </p>
           </div>
         </div>
@@ -234,7 +235,7 @@ export default function HistoryPage() {
                     "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
                   }`}
                 >
-                  {BACKEND_LABELS[entry.backend] ?? entry.backend}
+                  {getBackendLabel(entry.backend)}
                 </span>
 
                 {/* 置信度 */}
@@ -268,10 +269,10 @@ export default function HistoryPage() {
                        hover:bg-gray-50 dark:hover:bg-gray-700
                        disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-gray-800"
           >
-            上一页
+            {t('history.prev_page')}
           </button>
           <span className="text-sm text-gray-500 dark:text-gray-400">
-            第 {page + 1} 页
+            {t('history.page_number', { page: page + 1 })}
           </span>
           <button
             type="button"
@@ -283,7 +284,7 @@ export default function HistoryPage() {
                        hover:bg-gray-50 dark:hover:bg-gray-700
                        disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-gray-800"
           >
-            下一页
+            {t('history.next_page')}
           </button>
         </div>
       )}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from "react";
 import "mathlive";
+import { t } from "../lib/i18n";
 
 interface FormulaPreviewProps {
   latex: string;
@@ -67,14 +68,14 @@ export default function FormulaPreview({
           onClick={() => handleCopy("latex")}
           className="px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors"
         >
-          复制 LaTeX
+          {t('formula.copy_latex')}
         </button>
         <button
           type="button"
           onClick={() => handleCopy("mathml")}
           className="px-3 py-1.5 text-sm bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors"
         >
-          复制 MathML
+          {t('formula.copy_mathml')}
         </button>
       </div>
     </div>

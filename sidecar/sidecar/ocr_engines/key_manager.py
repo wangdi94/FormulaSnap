@@ -23,15 +23,27 @@ Usage:
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
 import platform
+import shutil
 import stat
 import subprocess
+import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
+
+try:
+    from cryptography.fernet import Fernet as _Fernet, InvalidToken as _InvalidToken
+
+    CRYPTOGRAPHY_AVAILABLE = True
+except ImportError:
+    _Fernet = None  # type: ignore[assignment,misc]
+    _InvalidToken = None  # type: ignore[assignment,misc]
+    CRYPTOGRAPHY_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -356,6 +368,336 @@ class FileBackend(KeyBackend):
         self._save_keys(data)
         logger.info("Deleted key from file for %s/%s", service, key_name)
         return True
+
+
+# ---------------------------------------------------------------------------
+# Encrypted File Backend (Fernet symmetric encryption)
+# ---------------------------------------------------------------------------
+
+
+class EncryptedFileBackend(KeyBackend):
+    """Encrypted file-based key storage using Fernet symmetric encryption.
+
+    Keys are encrypted at rest using a master encryption key stored in a
+    separate file. The master key can also be provided via the
+    ``FORMULASNP_MASTER_KEY`` environment variable (base64-encoded Fernet key).
+
+    Features:
+    - Fernet (AES-128-CBC + HMAC-SHA256) authenticated encryption
+    - Auto-migration from plaintext ``keys.json`` on first access
+    - Master key generation, backup, and restore
+
+    Args:
+        config_dir: Directory for storing keys and master key.
+            Defaults to the platform-specific application config directory.
+        master_key: Optional pre-existing Fernet key (bytes).
+            If not provided, loads from env var or generates/loads from file.
+    """
+
+    MASTER_KEY_FILENAME = "master.key"
+    ENCRYPTED_KEYS_FILENAME = "keys.enc.json"
+    MIGRATION_MARKER = ".migrated"
+
+    def __init__(
+        self,
+        config_dir: Optional[Path] = None,
+        master_key: Optional[bytes] = None,
+    ) -> None:
+        if not CRYPTOGRAPHY_AVAILABLE:
+            raise ImportError(
+                "cryptography library is required for EncryptedFileBackend. "
+                "Install it with: pip install cryptography"
+            )
+        if config_dir is None:
+            config_dir = self._default_config_dir()
+        self._config_dir = config_dir
+        self._config_file = config_dir / self.ENCRYPTED_KEYS_FILENAME
+        self._master_key_path = config_dir / self.MASTER_KEY_FILENAME
+        self._ensure_config_dir()
+
+        if master_key is not None:
+            self._master_key = master_key
+        else:
+            self._master_key = self._load_or_generate_master_key()
+
+        self._fernet = _Fernet(self._master_key)
+        self._auto_migrate()
+
+    @staticmethod
+    def _default_config_dir() -> Path:
+        """Get the default configuration directory."""
+        system = platform.system()
+        if system == "Darwin":
+            base = Path.home() / "Library" / "Application Support"
+        elif system == "Windows":
+            base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+        else:
+            base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+        return base / SERVICE_NAME
+
+    def _ensure_config_dir(self) -> None:
+        """Create config directory with restricted permissions."""
+        self._config_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self._config_dir.chmod(stat.S_IRWXU)
+        except OSError:
+            pass  # May fail on Windows
+
+    def _load_or_generate_master_key(self) -> bytes:
+        """Load the master encryption key from env var or file.
+
+        Checks in order:
+        1. ``FORMULASNP_MASTER_KEY`` environment variable (base64-encoded)
+        2. ``master.key`` file in config directory
+        3. Generates a new key and saves it
+
+        Returns:
+            The Fernet encryption key (bytes).
+        """
+        # 1. Check environment variable
+        env_key = os.environ.get("FORMULASNP_MASTER_KEY")
+        if env_key:
+            try:
+                key_bytes = base64.urlsafe_b64decode(env_key)
+                # Validate it's a valid Fernet key (32 bytes url-safe base64)
+                _Fernet(env_key.encode() if isinstance(env_key, str) else env_key)
+                logger.info("Loaded master key from environment variable")
+                return env_key.encode() if isinstance(env_key, str) else env_key
+            except Exception:
+                logger.warning("Invalid FORMULASNP_MASTER_KEY env var, ignoring")
+
+        # 2. Check file
+        if self._master_key_path.exists():
+            try:
+                key_data = self._master_key_path.read_bytes().strip()
+                _Fernet(key_data)  # type: ignore[misc]
+                logger.info("Loaded master key from file")
+                return key_data
+            except Exception:
+                logger.warning("Invalid master key file, regenerating")
+
+        # 3. Generate new key
+        return self._generate_and_save_master_key()
+
+    def _generate_and_save_master_key(self) -> bytes:
+        """Generate a new Fernet key and save it to file.
+
+        Returns:
+            The newly generated Fernet key.
+        """
+        key = _Fernet.generate_key()  # type: ignore[union-attr]
+        try:
+            self._master_key_path.write_bytes(key)
+            self._master_key_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+            logger.info("Generated and saved new master key")
+        except OSError as e:
+            logger.error("Failed to save master key: %s", e)
+            raise
+        return key
+
+    def _is_plaintext_json(self, path: Path) -> bool:
+        """Check if a JSON file contains plaintext (unencrypted) keys.
+
+        Reads the first few bytes to detect if it starts with '{'
+        (indicating unencrypted JSON) vs encrypted Fernet tokens
+        (which start with 'gAAAAA').
+
+        Args:
+            path: Path to the keys file.
+
+        Returns:
+            True if the file appears to be plaintext JSON.
+        """
+        if not path.exists():
+            return False
+        try:
+            with open(path, "rb") as f:
+                header = f.read(20)
+            # Plaintext JSON starts with '{', Fernet tokens start with 'gAAAAA'
+            return header.startswith(b"{")
+        except OSError:
+            return False
+
+    def _auto_migrate(self) -> None:
+        """Auto-migrate plaintext keys.json to encrypted storage.
+
+        Checks for an existing plaintext ``keys.json`` from FileBackend
+        and migrates it to encrypted ``keys.enc.json``. Creates a
+        ``.migrated`` marker to avoid re-migration.
+        """
+        marker = self._config_dir / self.MIGRATION_MARKER
+        if marker.exists():
+            return
+
+        plaintext_file = self._config_dir / "keys.json"
+        if not plaintext_file.exists():
+            return
+
+        if not self._is_plaintext_json(plaintext_file):
+            return
+
+        try:
+            with open(plaintext_file, "r") as f:
+                data = json.load(f)
+            if not data:
+                # Empty file, just mark as migrated
+                marker.write_text(str(time.time()))
+                return
+
+            # Save encrypted
+            self._save_keys(data)
+
+            # Backup plaintext file
+            backup_path = plaintext_file.with_suffix(".json.bak")
+            shutil.copy2(plaintext_file, backup_path)
+
+            # Remove plaintext file
+            plaintext_file.unlink()
+
+            # Write migration marker
+            marker.write_text(str(time.time()))
+
+            logger.info(
+                "Auto-migrated %d services from plaintext to encrypted storage",
+                len(data),
+            )
+        except Exception as e:
+            logger.error("Auto-migration failed: %s", e)
+            # Don't raise — fall back to empty encrypted store
+
+    def _load_keys(self) -> dict[str, dict[str, str]]:
+        """Load and decrypt keys from the encrypted config file.
+
+        Returns:
+            Decrypted key data dict, or empty dict if file doesn't exist
+            or decryption fails.
+        """
+        if not self._config_file.exists():
+            return {}
+        try:
+            encrypted_data = self._config_file.read_bytes()
+            decrypted_data = self._fernet.decrypt(encrypted_data)
+            return json.loads(decrypted_data)
+        except _InvalidToken:  # type: ignore[misc]
+            logger.error(
+                "Failed to decrypt keys — master key may have changed. "
+                "Keys will be treated as empty."
+            )
+            return {}
+        except (json.JSONDecodeError, OSError) as e:
+            logger.error("Failed to load encrypted keys file: %s", e)
+            return {}
+
+    def _save_keys(self, data: dict[str, dict[str, str]]) -> None:
+        """Encrypt and save keys to the config file.
+
+        Args:
+            data: Key data dict to encrypt and save.
+        """
+        try:
+            plaintext = json.dumps(data, indent=2).encode("utf-8")
+            encrypted_data = self._fernet.encrypt(plaintext)
+            self._config_file.write_bytes(encrypted_data)
+            self._config_file.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        except OSError as e:
+            logger.error("Failed to save encrypted keys file: %s", e)
+            raise
+
+    def get_key(self, service: str, key_name: str) -> Optional[str]:
+        data = self._load_keys()
+        service_keys = data.get(service, {})
+        value = service_keys.get(key_name)
+        if value:
+            logger.debug("Retrieved encrypted key for %s/%s", service, key_name)
+        return value
+
+    def set_key(self, service: str, key_name: str, key_value: str) -> None:
+        data = self._load_keys()
+        if service not in data:
+            data[service] = {}
+        data[service][key_name] = key_value
+        self._save_keys(data)
+        logger.info(
+            "Stored encrypted key for %s/%s (%s)",
+            service,
+            key_name,
+            _mask_key(key_value),
+        )
+
+    def delete_key(self, service: str, key_name: str) -> bool:
+        data = self._load_keys()
+        service_keys = data.get(service, {})
+        if key_name not in service_keys:
+            return False
+        del service_keys[key_name]
+        if not service_keys:
+            del data[service]
+        self._save_keys(data)
+        logger.info("Deleted encrypted key for %s/%s", service, key_name)
+        return True
+
+    # ------------------------------------------------------------------
+    # Master key management
+    # ------------------------------------------------------------------
+
+    def backup_master_key(self, backup_path: Optional[Path] = None) -> Path:
+        """Create a backup of the master encryption key.
+
+        Args:
+            backup_path: Where to save the backup. Defaults to
+                ``<config_dir>/master.key.bak.<timestamp>``.
+
+        Returns:
+            Path to the backup file.
+        """
+        if backup_path is None:
+            ts = int(time.time())
+            backup_path = self._config_dir / f"master.key.bak.{ts}"
+        shutil.copy2(self._master_key_path, backup_path)
+        backup_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        logger.info("Master key backed up to %s", backup_path)
+        return backup_path
+
+    def restore_master_key(self, backup_path: Path) -> None:
+        """Restore the master encryption key from a backup.
+
+        After restoring, the Fernet instance is re-created with the
+        restored key. Existing encrypted keys can then be decrypted
+        with the restored key.
+
+        Args:
+            backup_path: Path to the backup file.
+
+        Raises:
+            FileNotFoundError: If backup file doesn't exist.
+            ValueError: If backup contains an invalid Fernet key.
+        """
+        if not backup_path.exists():
+            raise FileNotFoundError(f"Backup file not found: {backup_path}")
+        key_data = backup_path.read_bytes().strip()
+        # Validate
+        try:
+            Fernet(key_data)
+        except Exception as e:
+            raise ValueError(f"Invalid Fernet key in backup: {e}") from e
+        self._master_key_path.write_bytes(key_data)
+        self._master_key_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        self._master_key = key_data
+        self._fernet = Fernet(key_data)
+        logger.info("Master key restored from %s", backup_path)
+
+    @staticmethod
+    def generate_key() -> bytes:
+        """Generate a new Fernet encryption key.
+
+        This is a convenience method. The key can be used to initialize
+        a new ``EncryptedFileBackend`` instance or passed via the
+        ``FORMULASNP_MASTER_KEY`` environment variable.
+
+        Returns:
+            A new Fernet key (bytes, url-safe base64-encoded).
+        """
+        return Fernet.generate_key()
 
 
 # ---------------------------------------------------------------------------
