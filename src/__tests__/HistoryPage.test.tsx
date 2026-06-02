@@ -11,7 +11,6 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 vi.mock('../lib/i18n', () => ({
   t: (key: string) => key,
-  getLang: () => 'en',
   getLocale: () => 'en-US',
   setLang: () => {},
 }));

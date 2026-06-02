@@ -23,11 +23,15 @@ export default function HistoryDetailPage() {
     png: null,
   });
 
-  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
+  const copyTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     return () => {
-      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      mountedRef.current = false;
+      for (const t of Object.values(copyTimeoutsRef.current)) {
+        clearTimeout(t);
+      }
     };
   }, []);
 
@@ -35,21 +39,24 @@ export default function HistoryDetailPage() {
   useEffect(() => {
     if (!id) return;
     (async () => {
+      if (!mountedRef.current) return;
       setLoading(true);
       setError(null);
       try {
         const result = await invoke<HistoryEntry | null>("get_history_by_id", {
           id: Number(id),
         });
+        if (!mountedRef.current) return;
         if (result) {
           setEntry(result);
         } else {
           setError(t('history.record_not_found'));
         }
       } catch (e) {
+        if (!mountedRef.current) return;
         setError(t('history.load_failed', { error: String(e) }));
       } finally {
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
     })();
   }, [id]);
@@ -61,16 +68,20 @@ export default function HistoryDetailPage() {
       setCopyState((prev) => ({ ...prev, [format]: "copying" }));
       try {
         await copyToClipboard(entry.latex, format);
+        if (!mountedRef.current) return;
         setCopyState((prev) => ({ ...prev, [format]: "copied" }));
-        if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-        copyTimeoutRef.current = setTimeout(() => {
+        if (copyTimeoutsRef.current[format]) clearTimeout(copyTimeoutsRef.current[format]);
+        copyTimeoutsRef.current[format] = setTimeout(() => {
+          if (!mountedRef.current) return;
           setCopyState((prev) => ({ ...prev, [format]: null }));
         }, 2000);
       } catch (e) {
         console.error("Copy failed:", e);
+        if (!mountedRef.current) return;
         setCopyState((prev) => ({ ...prev, [format]: "error" }));
-        if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-        copyTimeoutRef.current = setTimeout(() => {
+        if (copyTimeoutsRef.current[format]) clearTimeout(copyTimeoutsRef.current[format]);
+        copyTimeoutsRef.current[format] = setTimeout(() => {
+          if (!mountedRef.current) return;
           setCopyState((prev) => ({ ...prev, [format]: null }));
         }, 3000);
       }

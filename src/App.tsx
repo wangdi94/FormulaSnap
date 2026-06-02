@@ -50,7 +50,7 @@ function App() {
   const location = useLocation();
 
   useEffect(() => {
-    initSidecarPort();
+    void initSidecarPort();
     applyTheme(getTheme());
 
     const mq = window.matchMedia("(prefers-color-scheme: dark)");

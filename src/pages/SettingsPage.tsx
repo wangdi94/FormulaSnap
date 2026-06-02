@@ -7,7 +7,7 @@ import { getBackendOptions } from '../lib/constants';
 
 /* ─── API Key 字段定义 ─── */
 const API_KEY_FIELDS: {
-  key: keyof AppSettings['api_keys'];
+  key: keyof NonNullable<AppSettings['api_keys']>;
   label: string;
   placeholder: string;
   link?: string;
@@ -76,26 +76,21 @@ export default function SettingsPage() {
   /* ── 加载统计（带 5 秒超时） ── */
   const fetchStats = useCallback(async () => {
     abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+    abortRef.current = new AbortController();
 
     setStatsError(null);
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    const timeout = setTimeout(() => abortRef.current?.abort(), 5000);
 
     try {
       const result = await getStats();
-      if (!controller.signal.aborted) {
-        if (result === null) {
-          setStatsError(t('settings.stats_unavailable'));
-        } else {
-          setStats(result);
-        }
+      if (result === null) {
+        setStatsError(t('settings.stats_unavailable'));
+      } else {
+        setStats(result);
       }
     } catch (e) {
-      if (!controller.signal.aborted) {
-        console.warn('Failed to load stats:', e);
-        setStatsError(t('settings.stats_unavailable'));
-      }
+      console.warn('Failed to load stats:', e);
+      setStatsError(t('settings.stats_unavailable'));
     } finally {
       clearTimeout(timeout);
     }
@@ -171,7 +166,7 @@ export default function SettingsPage() {
   }, [recording]);
 
   /* ── 更新 API Key ── */
-  const updateApiKey = (field: keyof AppSettings['api_keys'], value: string) => {
+  const updateApiKey = (field: keyof NonNullable<AppSettings['api_keys']>, value: string) => {
     setSettings((prev) => {
       if (!prev) return prev;
       return {
@@ -189,7 +184,7 @@ export default function SettingsPage() {
     try {
       const keyErrors: string[] = [];
       for (const { key } of API_KEY_FIELDS) {
-        const value = settings.api_keys[key];
+        const value = settings.api_keys?.[key];
         if (value) {
           try {
             await saveApiKey(key, value);
@@ -200,7 +195,7 @@ export default function SettingsPage() {
       }
 
       const { api_keys: _ignored, ...settingsWithoutKeys } = settings;
-      await saveSettings(settingsWithoutKeys as AppSettings);
+      await saveSettings(settingsWithoutKeys);
 
       if (keyErrors.length > 0) {
         setSaveMsg(t('settings.save_partial', { errors: keyErrors.join(', ') }));
@@ -274,7 +269,7 @@ export default function SettingsPage() {
                 <input
                   id={`apikey-${key}`}
                   type={showKeys[key] ? 'text' : 'password'}
-                  value={settings.api_keys[key] || ''}
+                  value={settings.api_keys?.[key] || ''}
                   onChange={(e) => updateApiKey(key, e.target.value)}
                   placeholder={placeholder}
                   className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg
@@ -485,11 +480,17 @@ export default function SettingsPage() {
               type="button"
               onClick={async () => {
                 if (window.confirm(t('settings.reset_confirm'))) {
-                  const defaults = await resetSettings();
-                  setSettings(defaults);
-                  setSaveMsg(t('settings.reset_done'));
-                  setIsError(false);
-                  setTimeout(() => { setSaveMsg(null); setIsError(false); }, 2500);
+                  try {
+                    const defaults = await resetSettings();
+                    setSettings(defaults);
+                    setSaveMsg(t('settings.reset_done'));
+                    setIsError(false);
+                    setTimeout(() => { setSaveMsg(null); setIsError(false); }, 2500);
+                  } catch (e) {
+                    console.warn('Failed to reset settings:', e);
+                    setSaveMsg(t('settings.save_failed', { error: String(e) }));
+                    setIsError(true);
+                  }
                 }
               }}
               className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400
