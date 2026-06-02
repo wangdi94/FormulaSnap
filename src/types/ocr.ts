@@ -1,3 +1,10 @@
+export interface SelectionRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export type OcrBackend = 'pix2text' | 'mathpix' | 'openai' | 'claude' | 'gemini';
 
 export interface OcrRequest {

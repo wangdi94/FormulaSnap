@@ -17,11 +17,19 @@ interface FlowError {
 
 const SELECTING_TIMEOUT_MS = 15_000;
 
-function mapSidecarError(err: unknown): FlowError {
+export function extractSidecarError(detail: unknown): { errorType: string | undefined; message: string } {
+  if (detail == null || typeof detail !== 'object') {
+    return { errorType: undefined, message: '' };
+  }
+  const errorType = 'error' in detail && typeof detail.error === 'string' ? detail.error : undefined;
+  const message = 'message' in detail && typeof detail.message === 'string' ? detail.message : '';
+  return { errorType, message };
+}
+
+export function mapSidecarError(err: unknown): FlowError {
   if (err instanceof SidecarError) {
-    const detail = err.detail as Record<string, unknown> | undefined;
-    const errorType = detail?.error as string | undefined;
-    const message = (detail?.message as string) ?? err.message;
+    const { errorType, message: detailMessage } = extractSidecarError(err.detail);
+    const message = detailMessage || err.message;
 
     if (errorType === "API_KEY_ERROR") {
       return { message: t('capture.api_key_error', { message }), code: "API_KEY_ERROR", retryable: false };

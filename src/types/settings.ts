@@ -3,7 +3,7 @@ export type Theme = 'light' | 'dark' | 'system';
 export interface AppSettings {
   hotkey: string;  // e.g., "Ctrl+Shift+C" or "Cmd+Shift+C"
   default_backend: 'auto' | 'pix2text' | 'mathpix' | 'openai' | 'claude' | 'gemini';
-  api_keys: {
+  api_keys?: {
     openai?: string;
     claude?: string;
     gemini?: string;

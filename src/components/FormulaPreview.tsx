@@ -15,13 +15,6 @@ export default function FormulaPreview({
 }: FormulaPreviewProps) {
   const mathFieldRef = useRef<MathfieldElement>(null);
 
-  // 同步外部 latex 到 math-field
-  useEffect(() => {
-    if (mathFieldRef.current && mathFieldRef.current.value !== latex) {
-      mathFieldRef.current.value = latex;
-    }
-  }, [latex]);
-
   // 监听 math-field 内部变化
   const handleInput = useCallback(
     (e: Event) => {
@@ -59,6 +52,7 @@ export default function FormulaPreview({
     <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
       <math-field
         ref={mathFieldRef}
+        value={latex}
         read-only={readOnly ? "true" : undefined}
         className="w-full min-h-[3rem]"
       />

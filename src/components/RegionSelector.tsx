@@ -1,11 +1,5 @@
 import { useRef, useEffect, useCallback } from "react";
-
-interface SelectionRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+import type { SelectionRect } from "../types/ocr";
 
 interface RegionSelectorProps {
   screenshotBase64: string;
@@ -28,6 +22,10 @@ export default function RegionSelector({
   const startY = useRef(0);
   const currentX = useRef(0);
   const currentY = useRef(0);
+  const activeDragListeners = useRef<{
+    move: ((ev: MouseEvent) => void) | null;
+    up: (() => void) | null;
+  }>({ move: null, up: null });
 
   const getSelectionBox = useCallback(
     (cw: number, ch: number) => {
@@ -135,8 +133,10 @@ export default function RegionSelector({
         }
         window.removeEventListener("mousemove", onMouseMove);
         window.removeEventListener("mouseup", onMouseUp);
+        activeDragListeners.current = { move: null, up: null };
       };
 
+      activeDragListeners.current = { move: onMouseMove, up: onMouseUp };
       window.addEventListener("mousemove", onMouseMove);
       window.addEventListener("mouseup", onMouseUp);
     },
@@ -145,7 +145,13 @@ export default function RegionSelector({
 
   useEffect(() => {
     window.addEventListener("mousedown", handleMouseDown);
-    return () => window.removeEventListener("mousedown", handleMouseDown);
+    return () => {
+      window.removeEventListener("mousedown", handleMouseDown);
+      const { move, up } = activeDragListeners.current;
+      if (move) window.removeEventListener("mousemove", move);
+      if (up) window.removeEventListener("mouseup", up);
+      activeDragListeners.current = { move: null, up: null };
+    };
   }, [handleMouseDown]);
 
   return (
