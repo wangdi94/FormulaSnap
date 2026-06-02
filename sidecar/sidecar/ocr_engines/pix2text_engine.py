@@ -6,6 +6,7 @@ formulas and text from images.  No API key required, no cost.
 
 from __future__ import annotations
 
+import asyncio
 import io
 import threading
 import time
@@ -65,7 +66,7 @@ class Pix2TextEngine:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _ensure_initialized(self) -> None:
+    async def _ensure_initialized(self) -> None:
         """Lazily create the Pix2Text client on first use."""
         if self._initialized:
             return
@@ -73,8 +74,18 @@ class Pix2TextEngine:
             if self._initialized:  # double-check
                 return
             if Pix2Text is not None:
-                self._p2t = Pix2Text.from_config()
+                loop = asyncio.get_event_loop()
+                self._p2t = await loop.run_in_executor(
+                    None, Pix2Text.from_config
+                )
                 self._initialized = True
+
+    def _run_recognition(self, image: bytes) -> list[dict]:
+        """Run Pix2Text recognition synchronously (for executor)."""
+        from PIL import Image
+
+        with Image.open(io.BytesIO(image)) as img:
+            return self._p2t.recognize_page(img)
 
     # ------------------------------------------------------------------
     # OcrBackend Protocol methods
@@ -86,7 +97,7 @@ class Pix2TextEngine:
         Returns the highest-confidence formula block, or the concatenated
         text content when no formula is detected.
         """
-        self._ensure_initialized()
+        await self._ensure_initialized()
 
         if self._p2t is None:
             return OcrResult(
@@ -98,12 +109,11 @@ class Pix2TextEngine:
 
         start_time = time.time()
 
-        # Convert raw bytes → PIL Image
-        from PIL import Image
-
-        with Image.open(io.BytesIO(image)) as img:
-            # Run recognition
-            results = self._p2t.recognize_page(img)
+        # Run recognition in executor to avoid blocking the event loop
+        loop = asyncio.get_event_loop()
+        results = await loop.run_in_executor(
+            None, self._run_recognition, image
+        )
 
         # Prefer formulas; fall back to plain text
         formulas = [r for r in results if r.get("type") == "formula"]
