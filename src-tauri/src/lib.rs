@@ -65,7 +65,6 @@ fn open_selection_window(app: tauri::AppHandle) -> Result<(), String> {
         tauri::WebviewUrl::App("/selection".into()),
     )
     .title("选择区域")
-    .transparent(true)
     .decorations(false)
     .fullscreen(true)
     .always_on_top(true)

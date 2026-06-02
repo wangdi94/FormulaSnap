@@ -25,6 +25,11 @@ if sys.platform == "win32":
         dll_path = python_dll_dir / dll_name
         if dll_path.exists():
             _extra_binaries.append((str(dll_path), "."))
+    # Collect C extension .pyd files for SSL (ssl.py -> _ssl.pyd)
+    for pyd_name in ["_ssl.pyd", "_socket.pyd", "_hashlib.pyd"]:
+        pyd_path = python_dll_dir / pyd_name
+        if pyd_path.exists():
+            _extra_binaries.append((str(pyd_path), "."))
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -66,8 +71,11 @@ a = Analysis(
         # --- PIL / Pillow (used by pix2text) ---
         "PIL",
         "PIL.Image",
-        # --- SSL (Windows DLL bundling) ---
+        # --- SSL (Windows DLL bundling + C extension hook) ---
         "ssl",
+        "_ssl",
+        "_socket",
+        "_hashlib",
         # --- OCR engine SDKs ---
         "anthropic",
         "openai",
