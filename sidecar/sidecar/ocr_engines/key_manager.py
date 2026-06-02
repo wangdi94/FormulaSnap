@@ -31,6 +31,7 @@ import platform
 import shutil
 import stat
 import subprocess
+import threading
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -292,6 +293,7 @@ class FileBackend(KeyBackend):
             config_dir = self._default_config_dir()
         self._config_dir = config_dir
         self._config_file = config_dir / "keys.json"
+        self._lock = threading.Lock()
         self._ensure_config_dir()
 
     @staticmethod
@@ -350,22 +352,24 @@ class FileBackend(KeyBackend):
         return value
 
     def set_key(self, service: str, key_name: str, key_value: str) -> None:
-        data = self._load_keys()
-        if service not in data:
-            data[service] = {}
-        data[service][key_name] = key_value
-        self._save_keys(data)
+        with self._lock:
+            data = self._load_keys()
+            if service not in data:
+                data[service] = {}
+            data[service][key_name] = key_value
+            self._save_keys(data)
         logger.info("Stored key in file for %s/%s (%s)", service, key_name, _mask_key(key_value))
 
     def delete_key(self, service: str, key_name: str) -> bool:
-        data = self._load_keys()
-        service_keys = data.get(service, {})
-        if key_name not in service_keys:
-            return False
-        del service_keys[key_name]
-        if not service_keys:
-            del data[service]
-        self._save_keys(data)
+        with self._lock:
+            data = self._load_keys()
+            service_keys = data.get(service, {})
+            if key_name not in service_keys:
+                return False
+            del service_keys[key_name]
+            if not service_keys:
+                del data[service]
+            self._save_keys(data)
         logger.info("Deleted key from file for %s/%s", service, key_name)
         return True
 
@@ -458,7 +462,6 @@ class EncryptedFileBackend(KeyBackend):
         env_key = os.environ.get("FORMULASNP_MASTER_KEY")
         if env_key:
             try:
-                key_bytes = base64.urlsafe_b64decode(env_key)
                 # Validate it's a valid Fernet key (32 bytes url-safe base64)
                 _Fernet(env_key.encode() if isinstance(env_key, str) else env_key)
                 logger.info("Loaded master key from environment variable")
@@ -677,13 +680,13 @@ class EncryptedFileBackend(KeyBackend):
         key_data = backup_path.read_bytes().strip()
         # Validate
         try:
-            Fernet(key_data)
+            _Fernet(key_data)
         except Exception as e:
             raise ValueError(f"Invalid Fernet key in backup: {e}") from e
         self._master_key_path.write_bytes(key_data)
         self._master_key_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
         self._master_key = key_data
-        self._fernet = Fernet(key_data)
+        self._fernet = _Fernet(key_data)
         logger.info("Master key restored from %s", backup_path)
 
     @staticmethod
@@ -697,7 +700,7 @@ class EncryptedFileBackend(KeyBackend):
         Returns:
             A new Fernet key (bytes, url-safe base64-encoded).
         """
-        return Fernet.generate_key()
+        return _Fernet.generate_key()
 
 
 # ---------------------------------------------------------------------------
@@ -772,20 +775,20 @@ class KeyManager:
     def set_key(self, service: str, key_name: str, key_value: str) -> None:
         """Store an API key.
 
-        Stores in both keyring and file backend for redundancy.
+        Uses keyring when available; falls back to file backend only on failure.
 
         Args:
             service: Service identifier.
             key_name: Key name.
             key_value: The API key to store.
         """
-        # Try keyring first
         try:
             self._keyring.set_key(service, key_name, key_value)
+            logger.info("Stored key in keyring for %s/%s", service, key_name)
+            return
         except Exception:
             logger.warning("Keyring storage failed, using file backend only")
 
-        # Always store in file backend as backup
         self._file.set_key(service, key_name, key_value)
 
     def delete_key(self, service: str, key_name: str = "api_key") -> bool:
