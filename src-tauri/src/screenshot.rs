@@ -4,7 +4,12 @@ use xcap::Monitor;
 fn get_primary_monitor() -> Result<Monitor, Box<dyn std::error::Error>> {
     let mut monitors = Monitor::all()?;
     // 先找主显示器，没找到则取第一个（只调用一次 Monitor::all()）
-    if let Some(idx) = monitors.iter().position(|m| m.is_primary().unwrap_or(false)) {
+    if let Some(idx) = monitors.iter().position(|m| {
+        m.is_primary().unwrap_or_else(|e| {
+            log::warn!("检查显示器主屏状态失败，视为非主屏: {}", e);
+            false
+        })
+    }) {
         Ok(monitors.swap_remove(idx))
     } else {
         monitors.into_iter().next().ok_or_else(|| "No monitor found".into())

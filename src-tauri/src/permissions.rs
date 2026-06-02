@@ -44,7 +44,9 @@ pub fn emit_permission_status(app: &AppHandle) {
         #[cfg(not(target_os = "macos"))]
         platform: std::env::consts::OS.to_string(),
     };
-    let _ = app.emit("accessibility-permission-status", status);
+    if let Err(e) = app.emit("accessibility-permission-status", status) {
+        log::debug!("发送 accessibility-permission-status 事件失败: {}", e);
+    }
 }
 
 /// 打开 macOS 系统偏好设置的辅助功能权限页面。

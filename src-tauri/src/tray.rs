@@ -97,7 +97,10 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             {
                 let app = tray.app_handle();
                 if let Some(window) = app.get_webview_window("main") {
-                    if window.is_visible().unwrap_or(false) {
+                    if window.is_visible().unwrap_or_else(|e| {
+                        log::warn!("获取主窗口可见状态失败，默认视为不可见: {}", e);
+                        false
+                    }) {
                         if let Err(e) = window.hide() {
                             log::warn!("隐藏主窗口失败: {}", e);
                         }
