@@ -22,6 +22,7 @@ jobs:
             rust_target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -67,28 +68,8 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Build and release
-        uses: tauri-apps/tauri-action@v0.6
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'FormulaSnap ${{ github.ref_name }}'
-          releaseBody: |
-            ## FormulaSnap ${{ github.ref_name }}
-
-            ### Download
-
-            | Platform | Architecture | File |
-            |----------|-------------|------|
-            | macOS | Intel (x86_64) | `.dmg` |
-            | macOS | Apple Silicon (aarch64) | `.dmg` |
-            | Windows | x86_64 | `.msi` / `.exe` |
-
-            > Auto-update is enabled. Future releases will be delivered in-app.
-          releaseDraft: true
-          prerelease: false
-          args: --target ${{ matrix.rust_target }}
+      - name: Build Tauri application
+        run: pnpm tauri build --target ${{ matrix.rust_target }}
 
       # ---- Build artifact size verification ----
       - name: Verify build artifact sizes
@@ -148,3 +129,79 @@ jobs:
             exit 1
           fi
           echo "✅ All build artifact sizes within limits"
+
+      # ---- Upload to GitHub Release ----
+      - name: Upload artifacts to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "::group::Configure GitHub Release"
+          TAG="${{ github.ref_name }}"
+
+          # Check if release already exists (race-safe)
+          if gh release view "$TAG" --json name --jq .name > /dev/null 2>&1; then
+            echo "Release $TAG already exists — will upload artifacts"
+          else
+            echo "Creating draft release: $TAG"
+            NOTES_FILE=$(mktemp)
+            {
+              echo "## FormulaSnap $TAG"
+              echo ""
+              echo "### Download"
+              echo ""
+              echo "| Platform | Architecture | File |"
+              echo "|----------|-------------|------|"
+              echo "| macOS | Intel (x86_64) | \`.dmg\` |"
+              echo "| macOS | Apple Silicon (aarch64) | \`.dmg\` |"
+              echo "| Windows | x86_64 | \`.msi\` / \`.exe\` |"
+              echo ""
+              echo "> Auto-update is enabled. Future releases will be delivered in-app."
+            } > "$NOTES_FILE"
+            gh release create "$TAG" --draft --title "FormulaSnap $TAG" --notes-file "$NOTES_FILE"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Find build artifacts"
+          ARTIFACTS=()
+          while IFS= read -r f; do
+            ARTIFACTS+=("$f")
+            echo "Found: $f ($(du -h "$f" | cut -f1))"
+          done < <(find src-tauri/target/*/release/bundle -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \) 2>/dev/null)
+
+          while IFS= read -r f; do
+            ARTIFACTS+=("$f")
+            echo "Found: $f ($(du -h "$f" | cut -f1))"
+          done < <(find src-tauri/binaries -name "formulasnap-sidecar-*" -type f 2>/dev/null)
+
+          if [ ${#ARTIFACTS[@]} -eq 0 ]; then
+            echo "::warning::No artifacts found to upload"
+            echo "::endgroup::"
+            exit 1
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Upload artifacts to GitHub Release"
+          MAX_RETRIES=3
+          RETRY_DELAY=10
+          UPLOAD_OK=false
+
+          for ((i=1; i<=MAX_RETRIES; i++)); do
+            echo "Upload attempt $i of $MAX_RETRIES..."
+            if gh release upload "$TAG" --clobber "${ARTIFACTS[@]}"; then
+              UPLOAD_OK=true
+              break
+            fi
+            echo "Upload attempt $i failed"
+            if [ "$i" -lt "$MAX_RETRIES" ]; then
+              echo "Retrying in ${RETRY_DELAY}s..."
+              sleep "$RETRY_DELAY"
+            fi
+          done
+
+          if [ "$UPLOAD_OK" = false ]; then
+            echo "❌ Failed to upload artifacts after $MAX_RETRIES attempts"
+            exit 1
+          fi
+          echo "✅ All artifacts uploaded successfully"
+          echo "::endgroup::"
