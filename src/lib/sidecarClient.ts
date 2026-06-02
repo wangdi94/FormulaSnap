@@ -141,13 +141,6 @@ async function request<T>(
 // ---------------------------------------------------------------------------
 
 /**
- * 健康检查：验证 sidecar 是否就绪
- */
-export async function healthCheck(): Promise<HealthResponse> {
-  return request<HealthResponse>('/health');
-}
-
-/**
  * 调用 OCR 识别
  *
  * @param imageBase64 - 图片的 base64 编码（不含 data:image/... 前缀）
@@ -190,20 +183,6 @@ export async function getStats(): Promise<StatsResponse | null> {
 }
 
 /**
- * 验证指定后端的配置是否有效
- *
- * @param backend - 要验证的 OCR 引擎名称
- */
-export async function validateConfig(
-  backend: string,
-): Promise<ValidateConfigResponse> {
-  return request<ValidateConfigResponse>('/api/validate-config', {
-    method: 'POST',
-    body: JSON.stringify({ backend }),
-  });
-}
-
-/**
  * 保存 API Key 到 sidecar keyring
  */
 export async function saveApiKey(
@@ -223,27 +202,4 @@ export async function getApiKeys(): Promise<KeysResponse> {
   return request<KeysResponse>('/api/keys');
 }
 
-/**
- * 等待 sidecar 就绪（带重试）
- *
- * @param maxRetries - 最大重试次数
- * @param interval - 重试间隔（毫秒）
- * @returns 是否就绪
- */
-export async function waitForReady(
-  maxRetries: number = 60,
-  interval: number = 500,
-): Promise<boolean> {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const result = await healthCheck();
-      if (result.status === 'ok') {
-        return true;
-      }
-    } catch {
-      // sidecar 尚未就绪，继续等待
-    }
-    await new Promise((resolve) => setTimeout(resolve, interval));
-  }
-  return false;
-}
+

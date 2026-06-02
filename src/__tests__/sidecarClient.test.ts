@@ -3,8 +3,6 @@ import {
   SidecarError,
   getStats,
   callOcr,
-  healthCheck,
-  validateConfig,
   initSidecarPort,
   type StatsResponse,
   type OcrRequest,
@@ -180,16 +178,6 @@ describe('sidecarClient 导出函数', () => {
     expect(typeof callOcr).toBe('function');
     // callOcr(imageBase64, backend?) — TS 编译后 length=1（仅必需参数）
     expect(callOcr.length).toBe(1);
-  });
-
-  it('healthCheck 是函数，参数数量为 0', () => {
-    expect(typeof healthCheck).toBe('function');
-    expect(healthCheck.length).toBe(0);
-  });
-
-  it('validateConfig 是函数，参数数量为 1', () => {
-    expect(typeof validateConfig).toBe('function');
-    expect(validateConfig.length).toBe(1);
   });
 
   it('initSidecarPort 是函数，参数数量为 0', () => {
