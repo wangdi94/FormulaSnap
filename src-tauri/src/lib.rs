@@ -190,6 +190,7 @@ pub fn run() {
 
             if let Err(e) = logger::init_logger(&app_dir) {
                 eprintln!("Failed to initialize logger: {}", e);
+                logger::init_stderr_fallback();
             }
 
             let db_path = app_dir.join("app.db");
