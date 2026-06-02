@@ -121,8 +121,7 @@ class GeminiEngine(LlmProvider):
         if len(image) > GEMINI_IMAGE_LIMIT:
             effective_image = _compress_image(image)
 
-        # Detect MIME type from original image (before compression)
-        mime_type = detect_mime_type(image)
+        mime_type = detect_mime_type(effective_image)
 
         try:
             if self._client is None:
@@ -206,5 +205,5 @@ class GeminiEngine(LlmProvider):
         if self._client is not None:
             close_fn = getattr(self._client, "close", None)
             if close_fn is not None:
-                close_fn()
+                await close_fn()
             self._client = None
