@@ -7,7 +7,6 @@ import base64
 import binascii
 import logging
 import os
-import signal
 import threading
 
 from sidecar.ocr_engines.interface import (
@@ -148,7 +147,7 @@ async def shutdown():
     # 使用定时器延迟退出，确保 HTTP 响应先发送完成
     def _do_exit():
         logger.info("执行进程退出")
-        signal.raise_signal(signal.SIGINT)
+        os._exit(0)
 
     threading.Timer(0.5, _do_exit).start()
     return {"status": "shutting_down"}

@@ -251,7 +251,7 @@ mod tests {
         assert!(child_mutex.is_poisoned());
 
         let sp = SidecarProcess {
-            child: Mutex::into_inner(Arc::try_unwrap(child_mutex).unwrap()).unwrap(),
+            child: Mutex::new(Mutex::into_inner(Arc::try_unwrap(child_mutex).unwrap()).unwrap()),
             health_handle: Mutex::new(None),
         };
         drop(sp);
