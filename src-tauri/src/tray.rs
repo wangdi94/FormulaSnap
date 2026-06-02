@@ -105,7 +105,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                             log::warn!("隐藏主窗口失败: {}", e);
                         }
                     } else {
-                        show_and_focus_window(&app, "main");
+                        show_and_focus_window(app, "main");
                     }
                 }
             }

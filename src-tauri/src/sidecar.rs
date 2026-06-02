@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::net::{SocketAddr, TcpStream};
+use std::net::TcpStream;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
