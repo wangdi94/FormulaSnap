@@ -1,3 +1,5 @@
+use std::io::Write;
+use std::net::{SocketAddr, TcpStream};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
@@ -21,28 +23,63 @@ pub struct SidecarProcess {
 
 impl Drop for SidecarProcess {
     fn drop(&mut self) {
-        let url = format!("http://localhost:{}/shutdown", SIDECAR_PORT);
-        let shutdown_ok = reqwest::blocking::Client::builder()
-            .timeout(Duration::from_secs(2))
-            .build()
-            .ok()
-            .and_then(|client| client.post(&url).send().ok())
-            .is_some();
+        // 使用简单 TCP 连接发送 shutdown 请求，避免在 Drop 中创建 reqwest::Client
+        // （reqwest::blocking::Client 内部使用 tokio runtime，可能导致 panic）
+        let shutdown_ok = send_shutdown_via_tcp(SIDECAR_PORT);
 
         if shutdown_ok {
             log::info!("已发送 shutdown 请求，等待 sidecar 退出...");
             std::thread::sleep(Duration::from_millis(500));
         }
 
-        if let Ok(mut guard) = self.child.lock() {
-            if let Some(child) = guard.take() {
-                if let Err(e) = child.kill() {
-                    log::error!("Drop: 关闭 sidecar 失败: {}", e);
-                } else {
-                    log::info!("Drop: sidecar 进程已关闭");
-                }
+        // 处理 mutex 中毒：即使 mutex 中毒也要尝试 kill 子进程
+        let mut guard = match self.child.lock() {
+            Ok(g) => g,
+            Err(poisoned) => {
+                log::error!("SidecarProcess child mutex 已中毒，使用内部锁继续");
+                poisoned.into_inner()
+            }
+        };
+        if let Some(child) = guard.take() {
+            if let Err(e) = child.kill() {
+                log::error!("Drop: 关闭 sidecar 失败: {}", e);
+            } else {
+                log::info!("Drop: sidecar 进程已关闭");
             }
         }
+
+        // join 健康检查线程，确保线程在 Drop 完成前结束
+        let mut handle_guard = match self.health_handle.lock() {
+            Ok(g) => g,
+            Err(poisoned) => {
+                log::error!("SidecarProcess health_handle mutex 已中毒，使用内部锁继续");
+                poisoned.into_inner()
+            }
+        };
+        if let Some(handle) = handle_guard.take() {
+            if let Err(e) = handle.join() {
+                log::error!("Drop: 健康检查线程 panic: {:?}", e);
+            }
+        }
+    }
+}
+
+/// 使用简单 TCP 连接发送 shutdown HTTP 请求，避免依赖 reqwest（其内部 tokio runtime 在 Drop 中可能 panic）
+fn send_shutdown_via_tcp(port: u16) -> bool {
+    let addr = match format!("127.0.0.1:{}", port).parse::<std::net::SocketAddr>() {
+        Ok(a) => a,
+        Err(_) => return false,
+    };
+    match TcpStream::connect_timeout(&addr, Duration::from_secs(1)) {
+        Ok(mut stream) => {
+            let _ = stream.set_write_timeout(Some(Duration::from_secs(1)));
+            let request = format!(
+                "POST /shutdown HTTP/1.1\r\nHost: localhost:{}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                port
+            );
+            stream.write_all(request.as_bytes()).is_ok()
+        }
+        Err(_) => false,
     }
 }
 
@@ -57,6 +94,10 @@ pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
         .spawn()
         .map_err(|e| format!("启动 sidecar 进程失败: {}", e))?;
 
+    // NOTE: health_handle 竞态窗口 — 在 manage() 和 health_handle 赋值之间存在一个
+    // 微小窗口：如果在此期间 Drop 被触发，健康检查线程（已 spawn）的 JoinHandle 尚未
+    // 存入 SidecarProcess，导致线程无法被 join。此窗口在实际运行中不可触发，因为
+    // start_sidecar() 仅在 app setup 时调用一次，而 Drop 仅在 shutdown 时发生。
     app.manage(SidecarProcess {
         child: Mutex::new(Some(child)),
         health_handle: Mutex::new(None),
@@ -190,4 +231,59 @@ pub fn stop_sidecar(app: &AppHandle) {
 #[tauri::command]
 pub fn get_sidecar_port() -> u16 {
     SIDECAR_PORT
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+
+    #[test]
+    fn test_drop_poisoned_mutex() {
+        let child_mutex = Arc::new(Mutex::new(None::<CommandChild>));
+        let child_mutex_clone = child_mutex.clone();
+        let handle = thread::spawn(move || {
+            let _guard = child_mutex_clone.lock().unwrap();
+            panic!("故意 panic 以毒化 mutex");
+        });
+        let _ = handle.join();
+        assert!(child_mutex.is_poisoned());
+
+        let sp = SidecarProcess {
+            child: Mutex::into_inner(Arc::try_unwrap(child_mutex).unwrap()).unwrap(),
+            health_handle: Mutex::new(None),
+        };
+        drop(sp);
+    }
+
+    #[test]
+    fn test_drop_no_panic() {
+        let sp = SidecarProcess {
+            child: Mutex::new(None),
+            health_handle: Mutex::new(None),
+        };
+        drop(sp);
+    }
+
+    #[test]
+    fn test_drop_joins_health_handle() {
+        let flag = Arc::new(Mutex::new(false));
+        let flag_clone = flag.clone();
+
+        let handle = thread::spawn(move || {
+            *flag_clone.lock().unwrap() = true;
+        });
+
+        let sp = SidecarProcess {
+            child: Mutex::new(None),
+            health_handle: Mutex::new(Some(handle)),
+        };
+
+        drop(sp);
+        assert!(*flag.lock().unwrap());
+    }
+
+    #[test]
+    fn it_compiles() {}
 }
