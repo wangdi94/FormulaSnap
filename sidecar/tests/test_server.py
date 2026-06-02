@@ -34,11 +34,32 @@ def test_health_endpoint(client):
 
 
 def test_shutdown_endpoint(client):
-    with patch("sidecar.api.server.os._exit") as mock_exit:
+    with patch("sidecar.api.server.signal.raise_signal"):
         response = client.post("/shutdown")
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "shutting_down"
+
+
+def test_shutdown_graceful(client):
+    import asyncio
+    from sidecar.api.server import lifespan
+
+    with patch("sidecar.api.server.signal.raise_signal"):
+        response = client.post("/shutdown")
+        assert response.status_code == 200
+        assert response.json() == {"status": "shutting_down"}
+
+    mock_engine = MagicMock()
+    mock_engine.aclose = AsyncMock()
+    _engines["test_engine"] = mock_engine
+
+    async def _verify_cleanup():
+        async with lifespan(app):
+            pass
+        mock_engine.aclose.assert_called_once()
+
+    asyncio.run(_verify_cleanup())
 
 
 def test_ocr_endpoint_valid_request(client):
@@ -230,6 +251,41 @@ def test_ocr_endpoint_invalid_base64_returns_400(client):
         assert detail["error"] == "INVALID_IMAGE"
 
 
+# ---------------------------------------------------------------------------
+# Image validation
+# ---------------------------------------------------------------------------
+
+
+def test_ocr_empty_image_returns_400(client):
+    response = client.post(
+        "/api/ocr",
+        json={"image_base64": "", "backend": "pix2text"},
+    )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["error"] == "EMPTY_IMAGE"
+    assert "Empty image" in detail["message"]
+
+
+def test_ocr_oversized_image_returns_413():
+    from sidecar.api.server import validate_image
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc_info:
+        validate_image(b"x" * 15_000_001)
+    assert exc_info.value.status_code == 413
+
+
+def test_ocr_corrupt_image_returns_400(client):
+    response = client.post(
+        "/api/ocr",
+        json={"image_base64": "!!!invalid-corrupt!!!", "backend": "openai"},
+    )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["error"] == "INVALID_IMAGE"
+
+
 def test_ocr_endpoint_null_confidence_for_llm(client):
     with patch("sidecar.api.server.get_engine") as mock_get_engine:
         mock_engine = MagicMock()
@@ -249,3 +305,21 @@ def test_ocr_endpoint_null_confidence_for_llm(client):
         assert response.status_code == 200
         data = response.json()
         assert data["confidence"] is None
+
+
+def test_ocr_rate_limit_before_call(client):
+    """Verify 429 is returned BEFORE engine.recognize() when daily limit exceeded."""
+    mock_engine = MagicMock()
+    mock_engine.recognize = AsyncMock()
+    register_engine("openai", mock_engine)
+
+    for _ in range(100):
+        cost_tracker.record_call(backend="openai", tokens_used=100, cost_usd=0.001)
+
+    response = client.post(
+        "/api/ocr",
+        json={"image_base64": "dGVzdA==", "backend": "openai"},
+    )
+
+    assert response.status_code == 429
+    mock_engine.recognize.assert_not_called()

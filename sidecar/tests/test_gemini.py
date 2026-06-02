@@ -99,6 +99,47 @@ class TestGeminiEngine:
             await self.engine.recognize(small_image, OcrOptions())
             mock_compress.assert_not_called()
 
+    @patch("sidecar.ocr_engines.gemini_engine.genai")
+    async def test_recognize_exactly_at_limit_not_compressed(self, mock_genai):
+        """Image exactly at 7MB limit is NOT compressed (not > limit)."""
+        from sidecar.ocr_engines.gemini_engine import GEMINI_IMAGE_LIMIT
+
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.text = "$x$"
+        mock_response.usage_metadata.prompt_token_count = 100
+        mock_response.usage_metadata.candidates_token_count = 50
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+        exact_limit_image = b"\x00" * GEMINI_IMAGE_LIMIT
+
+        with patch("sidecar.ocr_engines.gemini_engine._compress_image") as mock_compress:
+            await self.engine.recognize(exact_limit_image, OcrOptions())
+            mock_compress.assert_not_called()
+
+    @patch("sidecar.ocr_engines.gemini_engine.genai")
+    async def test_recognize_one_byte_over_limit_compressed(self, mock_genai):
+        """Image 1 byte over 7MB limit IS compressed."""
+        from sidecar.ocr_engines.gemini_engine import GEMINI_IMAGE_LIMIT
+
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.text = "\\int_0^1 x^2 dx"
+        mock_response.usage_metadata.prompt_token_count = 100
+        mock_response.usage_metadata.candidates_token_count = 50
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+        over_limit_image = b"\x00" * (GEMINI_IMAGE_LIMIT + 1)
+
+        with patch("sidecar.ocr_engines.gemini_engine._compress_image") as mock_compress:
+            mock_compress.return_value = b"compressed_png"
+            await self.engine.recognize(over_limit_image, OcrOptions())
+            mock_compress.assert_called_once_with(over_limit_image)
+
     # ------------------------------------------------------------------
     # Cost estimation
     # ------------------------------------------------------------------
@@ -269,6 +310,28 @@ class TestGeminiEngine:
         with pytest.raises(NetworkError, match="Gemini network error"):
             await self.engine.recognize(b"img", OcrOptions())
 
+    # ------------------------------------------------------------------
+    # aclose
+    # ------------------------------------------------------------------
+
+    @patch("sidecar.ocr_engines.gemini_engine.genai")
+    async def test_gemini_aclose(self, mock_genai):
+        """aclose awaits client.close() and sets _client to None."""
+        mock_client = MagicMock()
+        mock_client.close = AsyncMock()
+        self.engine._client = mock_client
+
+        await self.engine.aclose()
+
+        mock_client.close.assert_awaited_once()
+        assert self.engine._client is None
+
+    @patch("sidecar.ocr_engines.gemini_engine.genai")
+    async def test_gemini_aclose_no_client(self, mock_genai):
+        """aclose is safe when _client is already None."""
+        self.engine._client = None
+        await self.engine.aclose()
+
 
 class TestDetectMimeType:
     """Tests for detect_mime_type helper."""
@@ -333,3 +396,48 @@ class TestCompressImage:
         assert len(small_image) <= GEMINI_IMAGE_LIMIT
         result = _compress_image(small_image)
         assert len(result) <= GEMINI_IMAGE_LIMIT
+
+    def test_compress_image_mime_type(self):
+        """PNG input yields JPEG output after _compress_image."""
+        from sidecar.ocr_engines.gemini_engine import _compress_image
+        from sidecar.ocr_engines.image_utils import detect_mime_type
+        from PIL import Image
+        import io
+
+        img = Image.new("RGB", (10, 10), color="red")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        png_image = buf.getvalue()
+
+        compressed = _compress_image(png_image)
+        mime_type = detect_mime_type(compressed)
+
+        assert mime_type == "image/jpeg", f"Expected image/jpeg, got {mime_type}"
+
+    def test_compress_image_empty_raises(self):
+        """Empty image raises an exception."""
+        from sidecar.ocr_engines.gemini_engine import _compress_image
+
+        with pytest.raises(Exception):
+            _compress_image(b"")
+
+    def test_compress_image_just_over_limit(self):
+        """A real image just over the limit compresses successfully."""
+        from sidecar.ocr_engines.gemini_engine import _compress_image, GEMINI_IMAGE_LIMIT
+        from PIL import Image
+        import io
+
+        # Create a large enough image to exceed the limit
+        img = Image.new("RGB", (2000, 2000), color="red")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        large_image = buf.getvalue()
+
+        # Ensure it's actually over the limit
+        if len(large_image) <= GEMINI_IMAGE_LIMIT:
+            # Need a bigger image — duplicate it
+            large_image = large_image * ((GEMINI_IMAGE_LIMIT // len(large_image)) + 1)
+
+        result = _compress_image(large_image)
+        assert len(result) <= GEMINI_IMAGE_LIMIT
+        assert len(result) > 0

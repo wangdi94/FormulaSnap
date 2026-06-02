@@ -380,3 +380,41 @@ class TestKeyManager:
         services = km.list_services()
 
         assert set(services) == {"openai", "mathpix"}
+
+    def test_set_key_no_duplicate(self, tmp_path):
+        """When keyring succeeds, file backend should NOT be written to."""
+        file_backend = FileBackend(config_dir=tmp_path)
+        mock_keyring = MagicMock()
+        mock_keyring.set_key.return_value = None
+
+        km = KeyManager(keyring_backend=mock_keyring, file_backend=file_backend)
+        km.set_key("openai", "api_key", "sk-keyring-ok")
+
+        mock_keyring.set_key.assert_called_once_with("openai", "api_key", "sk-keyring-ok")
+        assert file_backend.get_key("openai", "api_key") is None
+
+    def test_concurrent_set_key(self, tmp_path):
+        """Concurrent set_key calls from multiple threads should not lose keys."""
+        import threading
+
+        file_backend = FileBackend(config_dir=tmp_path)
+        mock_keyring = MagicMock()
+        mock_keyring.set_key.side_effect = RuntimeError("no keyring")
+
+        km = KeyManager(keyring_backend=mock_keyring, file_backend=file_backend)
+
+        n_threads = 10
+        barrier = threading.Barrier(n_threads)
+
+        def worker(i):
+            barrier.wait()
+            km.set_key(f"service_{i}", "api_key", f"key_{i}")
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(n_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        for i in range(n_threads):
+            assert file_backend.get_key(f"service_{i}", "api_key") == f"key_{i}"
