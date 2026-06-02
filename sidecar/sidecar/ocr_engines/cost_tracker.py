@@ -181,6 +181,18 @@ class CostTracker:
                     retry_after=seconds_until_midnight,
                 )
 
+    def check_limit_only(self) -> None:
+        """Check whether a new API call is allowed without recording it.
+
+        Use this for pre-call validation: call before the API request,
+        then call record_call() after a successful response.
+
+        Raises:
+            RateLimitExceeded: If the daily limit is reached or the
+                minimum interval has not elapsed since the last call.
+        """
+        self.check_rate_limit()
+
     # ------------------------------------------------------------------
     # Recording
     # ------------------------------------------------------------------
