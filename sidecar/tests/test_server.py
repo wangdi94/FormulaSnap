@@ -34,7 +34,7 @@ def test_health_endpoint(client):
 
 
 def test_shutdown_endpoint(client):
-    with patch("sidecar.api.server.signal.raise_signal"):
+    with patch("sidecar.api.server.os._exit"):
         response = client.post("/shutdown")
         assert response.status_code == 200
         data = response.json()
@@ -45,7 +45,7 @@ def test_shutdown_graceful(client):
     import asyncio
     from sidecar.api.server import lifespan
 
-    with patch("sidecar.api.server.signal.raise_signal"):
+    with patch("sidecar.api.server.os._exit"):
         response = client.post("/shutdown")
         assert response.status_code == 200
         assert response.json() == {"status": "shutting_down"}
