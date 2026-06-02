@@ -65,7 +65,5 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Build (dry-run)
-        uses: tauri-apps/tauri-action@v0.6
-        with:
-          args: --target ${{ matrix.rust_target }}
+      - name: Build Tauri app (dry-run)
+        run: pnpm tauri build --target ${{ matrix.rust_target }}
