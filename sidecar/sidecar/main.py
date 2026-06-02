@@ -1,4 +1,5 @@
 import logging
+import os
 
 import uvicorn
 from sidecar.api.server import app, register_engine
@@ -25,7 +26,15 @@ def main():
     logger.info("Starting FormulaSnap sidecar...")
     _register_engines()
     logger.info("Registered OCR engines: pix2text, mathpix, openai, claude, gemini")
-    uvicorn.run(app, host="127.0.0.1", port=8477)
+    # Prevent uvicorn from overriding our custom logging config
+    reload_enabled = os.environ.get("FORMULASNAP_SIDECAR_RELOAD", "").lower() == "true"
+    uvicorn.run(
+        app,
+        host="127.0.0.1",
+        port=8477,
+        log_config=None,
+        reload=reload_enabled,
+    )
 
 
 if __name__ == "__main__":

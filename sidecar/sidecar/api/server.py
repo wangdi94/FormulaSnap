@@ -7,6 +7,7 @@ import base64
 import binascii
 import logging
 import os
+import signal
 import threading
 
 from sidecar.ocr_engines.interface import (
@@ -115,6 +116,20 @@ def register_engine(backend: str, engine: OcrBackend) -> None:
     _engines[backend] = engine
 
 
+def validate_image(image_bytes: bytes) -> None:
+    """Validate decoded image bytes before passing to OCR engine."""
+    if len(image_bytes) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "EMPTY_IMAGE", "message": "Empty image data"},
+        )
+    if len(image_bytes) > 15_000_000:
+        raise HTTPException(
+            status_code=413,
+            detail={"error": "IMAGE_TOO_LARGE", "message": "Image too large (max 15MB)"},
+        )
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -133,7 +148,7 @@ async def shutdown():
     # 使用定时器延迟退出，确保 HTTP 响应先发送完成
     def _do_exit():
         logger.info("执行进程退出")
-        os._exit(0)
+        signal.raise_signal(signal.SIGINT)
 
     threading.Timer(0.5, _do_exit).start()
     return {"status": "shutting_down"}
@@ -142,14 +157,18 @@ async def shutdown():
 @app.post("/api/ocr", response_model=OcrResponse)
 async def ocr_endpoint(request: OcrRequest):
     try:
-        engine = get_engine(request.backend)
         image_bytes = base64.b64decode(request.image_base64)
+        validate_image(image_bytes)
+        engine = get_engine(request.backend)
+
+        # Pre-call rate limit check — prevents API calls when over limit
+        cost_tracker.check_limit_only()
 
         result = await engine.recognize(image_bytes, OcrOptions())
 
         tokens = result.cost_estimate.tokens_used if result.cost_estimate else 0
         cost = result.cost_estimate.estimated_cost_usd if result.cost_estimate else 0.0
-        cost_tracker.check_and_record(
+        cost_tracker.record_call(
             backend=result.backend,
             tokens_used=tokens,
             cost_usd=cost,
