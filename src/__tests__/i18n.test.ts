@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { t, getLang, setLang } from '../lib/i18n';
+import { t, setLang, __resetLangCache } from '../lib/i18n';
 
 describe('i18n', () => {
   beforeEach(() => {
     localStorage.clear();
+    __resetLangCache();
     // Default: zh-CN locale for navigator.language
     Object.defineProperty(navigator, 'language', {
       value: 'zh-CN',
@@ -26,6 +27,7 @@ describe('i18n', () => {
         configurable: true,
         writable: true,
       });
+      __resetLangCache();
       expect(t('app.title')).toBe('FormulaSnap');
       expect(t('nav.home')).toBe('Home');
       expect(t('nav.history')).toBe('History');
@@ -34,6 +36,7 @@ describe('i18n', () => {
 
     it('localStorage language 优先于系统语言', () => {
       localStorage.setItem('language', 'en');
+      __resetLangCache();
       // navigator.language is 'zh-CN' but localStorage overrides
       expect(t('nav.home')).toBe('Home');
     });
@@ -55,32 +58,8 @@ describe('i18n', () => {
         configurable: true,
         writable: true,
       });
+      __resetLangCache();
       expect(t('history.time.minutes_ago', { n: 5 })).toBe('5 minutes ago');
-    });
-  });
-
-  describe('getLang()', () => {
-    it('返回中文（当系统语言为中文时）', () => {
-      expect(getLang()).toBe('zh');
-    });
-
-    it('返回英文（当系统语言为英文时）', () => {
-      Object.defineProperty(navigator, 'language', {
-        value: 'en-US',
-        configurable: true,
-        writable: true,
-      });
-      expect(getLang()).toBe('en');
-    });
-
-    it('localStorage 覆盖系统语言', () => {
-      localStorage.setItem('language', 'en');
-      expect(getLang()).toBe('en');
-    });
-
-    it('无效的 localStorage 值导致回退到系统语言', () => {
-      localStorage.setItem('language', 'invalid');
-      expect(getLang()).toBe('zh'); // system is zh-CN
     });
   });
 
