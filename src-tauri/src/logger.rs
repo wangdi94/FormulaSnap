@@ -39,6 +39,8 @@ impl Log for FileLogger {
         if let Ok(mut file) = self.file.lock() {
             if file.write_all(message.as_bytes()).is_err() {
                 eprint!("{}", message);
+            } else if let Err(e) = file.flush() {
+                eprintln!("日志刷新失败: {}", e);
             }
         } else {
             log::warn!("日志文件 mutex 中毒，降级到 stderr 输出");
@@ -50,6 +52,16 @@ impl Log for FileLogger {
         if let Ok(mut file) = self.file.lock() {
             if file.flush().is_err() {
                 eprintln!("flush log failed");
+            }
+        }
+    }
+}
+
+impl Drop for FileLogger {
+    fn drop(&mut self) {
+        if let Ok(mut file) = self.file.lock() {
+            if let Err(e) = file.flush() {
+                eprintln!("Drop 时日志刷新失败: {}", e);
             }
         }
     }
