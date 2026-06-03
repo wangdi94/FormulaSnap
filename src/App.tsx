@@ -65,7 +65,9 @@ function App() {
     return (
       <>
         <NavigationListener />
-        <SelectionPage />
+        <ErrorBoundary>
+          <SelectionPage />
+        </ErrorBoundary>
       </>
     );
   }
