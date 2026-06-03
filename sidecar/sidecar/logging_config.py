@@ -20,12 +20,20 @@ from pathlib import Path
 def _get_app_data_dir() -> Path:
     """Get the platform-specific application data directory.
 
+    The ``FORMULASNAP_APP_DATA_DIR`` environment variable takes highest
+    priority.  When set, its value is returned directly without consulting
+    platform conventions.
+
     Returns:
         Path to the application data directory:
         - macOS: ~/Library/Application Support/formulasnap/
         - Windows: %APPDATA%/formulasnap/
         - Linux: ~/.config/formulasnap/
     """
+    env_override = os.environ.get("FORMULASNAP_APP_DATA_DIR")
+    if env_override:
+        return Path(env_override)
+
     system = platform.system()
     if system == "Darwin":
         base = Path.home() / "Library" / "Application Support"

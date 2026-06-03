@@ -85,6 +85,16 @@ fn send_shutdown_via_tcp(port: u16) -> bool {
 
 /// 启动 Python sidecar 子进程，并在后台线程中轮询健康检查。
 pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
+    // 将 Rust 的 app_data_dir 传递给 Python sidecar，确保两侧日志路径一致。
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("获取 app_data_dir 失败: {}", e))?;
+    std::env::set_var(
+        "FORMULASNAP_APP_DATA_DIR",
+        app_data_dir.to_string_lossy().to_string(),
+    );
+
     let sidecar_command = app
         .shell()
         .sidecar("formulasnap-sidecar")
