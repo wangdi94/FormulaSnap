@@ -11,6 +11,8 @@ import os
 import sys
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_submodules
+
 # ---------------------------------------------------------------------------
 # Platform-aware extra binaries (Windows: bundle OpenSSL DLLs)
 # ---------------------------------------------------------------------------
@@ -45,18 +47,8 @@ a = Analysis(
     binaries=_extra_binaries,
     datas=[],
     hiddenimports=[
-        # --- Core dependencies ---
-        "uvicorn",
-        "uvicorn.logging",
-        "uvicorn.loops",
-        "uvicorn.loops.auto",
-        "uvicorn.protocols",
-        "uvicorn.protocols.http",
-        "uvicorn.protocols.http.auto",
-        "uvicorn.protocols.websockets",
-        "uvicorn.protocols.websockets.auto",
-        "uvicorn.lifespan",
-        "uvicorn.lifespan.on",
+        # --- uvicorn (all submodules — auto-discovered to avoid missing imports) ---
+        *collect_submodules("uvicorn"),
         "fastapi",
         "pydantic",
         "httpx",
@@ -86,7 +78,7 @@ a = Analysis(
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=[str(ROOT / "sidecar" / "runtime_hook.py")],
     excludes=[
         # Heavy ML frameworks not needed
         "torch",
@@ -119,7 +111,7 @@ exe = EXE(
     [],
     name="formulasnap-sidecar",
     debug=False,
-    bootloader_ignore_signals=False,
+    bootloader_ignore_signals=True,
     strip=True,
     upx=True,
     console=True,  # --console: show terminal for debugging
