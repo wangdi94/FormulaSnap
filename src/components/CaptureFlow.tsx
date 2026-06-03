@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { callOcr, type OcrResponse, type OcrBackend, SidecarError } from "../lib/sidecarClient";
 import { loadSettings } from "../lib/settings";
 import { getBackendLabel } from "../lib/constants";
@@ -116,14 +117,24 @@ export default function CaptureFlow() {
         const { x, y, width, height } = event.payload;
         setState("capturing");
         try {
-          const base64 = await invoke<string>("capture_region_base64", {
-            x, y, width, height,
-          });
+          const base64 = await Promise.race([
+            invoke<string>("capture_region_base64", { x, y, width, height }),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("截图命令超时")), 15000),
+            ),
+          ]);
           setImageBase64(base64);
           await runOcr(base64);
         } catch (err) {
           setError(mapSidecarError(err));
           setState("error");
+        }
+        // 恢复主窗口焦点
+        try {
+          await getCurrentWindow().show();
+          await getCurrentWindow().setFocus();
+        } catch (e) {
+          console.warn("恢复主窗口焦点失败:", e);
         }
       },
     );
@@ -133,8 +144,15 @@ export default function CaptureFlow() {
   }, [runOcr]);
 
   useEffect(() => {
-    const unlisten = listen("selection-cancelled", () => {
+    const unlisten = listen("selection-cancelled", async () => {
       setState("idle");
+      // 恢复主窗口焦点
+      try {
+        await getCurrentWindow().show();
+        await getCurrentWindow().setFocus();
+      } catch (e) {
+        console.warn("恢复主窗口焦点失败:", e);
+      }
     });
     return () => {
       unlisten.then((fn) => fn());

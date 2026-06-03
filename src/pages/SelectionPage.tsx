@@ -9,8 +9,12 @@ export default function SelectionPage() {
   const [screenshot, setScreenshot] = useState<string | null>(null);
 
   useEffect(() => {
-    invoke<string>("capture_screen_for_selection")
-      .then(setScreenshot)
+    Promise.race([
+      invoke<string>("capture_screen_for_selection"),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("截图命令超时")), 15000),
+      ),
+    ]).then(setScreenshot)
       .catch((err) => {
         console.error("Failed to capture screen for selection:", err);
         getCurrentWindow().close();

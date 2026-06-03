@@ -202,3 +202,26 @@ describe('HealthResponse / ValidateConfigResponse', () => {
     expect(v.message).toBe('OK');
   });
 });
+
+// ---------------------------------------------------------------------------
+// callOcr 超时 / abort 转发行为
+// ---------------------------------------------------------------------------
+
+describe('callOcr 超时与 abort 转发', () => {
+  it('将外部已 abort 的 signal 转发到内部 controller，请求立即拒绝', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      callOcr('dummy-image', 'pix2text', { signal: controller.signal }),
+    ).rejects.toThrow();
+  });
+
+  it('外部 signal 未 abort 时不影响请求（请求因无 sidecar 而网络错误拒绝）', async () => {
+    const controller = new AbortController();
+
+    await expect(
+      callOcr('dummy-image', 'pix2text', { signal: controller.signal }),
+    ).rejects.toThrow();
+  });
+});

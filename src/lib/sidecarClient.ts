@@ -152,14 +152,26 @@ export async function callOcr(
   backend: OcrBackend | 'auto' = 'pix2text',
   options?: { signal?: AbortSignal },
 ): Promise<OcrResponse> {
-  return request<OcrResponse>('/api/ocr', {
-    method: 'POST',
-    body: JSON.stringify({
-      image_base64: imageBase64,
-      backend,
-    }),
-    signal: options?.signal,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
+  const externalSignal = options?.signal;
+  const onExternalAbort = () => controller.abort();
+  externalSignal?.addEventListener('abort', onExternalAbort);
+
+  try {
+    return await request<OcrResponse>('/api/ocr', {
+      method: 'POST',
+      body: JSON.stringify({
+        image_base64: imageBase64,
+        backend,
+      }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
+  }
 }
 
 /**
