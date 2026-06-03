@@ -62,7 +62,7 @@ class ClaudeEngine(LlmProvider):
         image_base64 = base64.b64encode(image).decode()
 
         if self._client is None:
-            self._client = anthropic.AsyncAnthropic(api_key=self._api_key)
+            self._client = anthropic.AsyncAnthropic(api_key=self._api_key, timeout=60.0)
         client = self._client
 
         try:

@@ -64,7 +64,7 @@ class OpenAIEngine(LlmProvider):
         image_base64 = base64.b64encode(image).decode()
 
         if self._client is None:
-            self._client = AsyncOpenAI(api_key=self._api_key)
+            self._client = AsyncOpenAI(api_key=self._api_key, timeout=60.0)
 
         try:
             response = await self._client.chat.completions.create(

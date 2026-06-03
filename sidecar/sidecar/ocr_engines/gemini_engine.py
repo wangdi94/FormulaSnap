@@ -5,6 +5,7 @@ Uses Gemini 2.5 Pro to extract LaTeX from images.
 
 from __future__ import annotations
 
+import asyncio
 import io
 import os
 import time
@@ -132,15 +133,18 @@ class GeminiEngine(LlmProvider):
                 data=effective_image, mime_type=mime_type
             )
 
-            response = await client.aio.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=[
-                    image_part,
-                    "Extract all mathematical formulas from this image.",
-                ],
-                config=types.GenerateContentConfig(
-                    system_instruction=self._build_ocr_prompt(),
+            response = await asyncio.wait_for(
+                client.aio.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=[
+                        image_part,
+                        "Extract all mathematical formulas from this image.",
+                    ],
+                    config=types.GenerateContentConfig(
+                        system_instruction=self._build_ocr_prompt(),
+                    ),
                 ),
+                timeout=90,
             )
         except _ClientError as exc:
             # 401/403 → authentication error, 429 → rate limit

@@ -75,8 +75,9 @@ class Pix2TextEngine:
                 return
             if Pix2Text is not None:
                 loop = asyncio.get_event_loop()
-                self._p2t = await loop.run_in_executor(
-                    None, Pix2Text.from_config
+                self._p2t = await asyncio.wait_for(
+                    loop.run_in_executor(None, Pix2Text.from_config),
+                    timeout=60,
                 )
                 self._initialized = True
 
@@ -111,8 +112,9 @@ class Pix2TextEngine:
 
         # Run recognition in executor to avoid blocking the event loop
         loop = asyncio.get_event_loop()
-        results = await loop.run_in_executor(
-            None, self._run_recognition, image
+        results = await asyncio.wait_for(
+            loop.run_in_executor(None, self._run_recognition, image),
+            timeout=90,
         )
 
         # Prefer formulas; fall back to plain text
