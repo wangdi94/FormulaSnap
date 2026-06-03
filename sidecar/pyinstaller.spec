@@ -35,6 +35,14 @@ if sys.platform == "win32":
     # Nuclear option: ensure PyInstaller collects ALL ssl binary deps
     _ssl_datas, _ssl_binaries, _ssl_hidden = collect_all("ssl")
     _extra_binaries.extend(_ssl_binaries)
+    # Bundle VC++ 2015-2022 runtime DLLs (needed by _ssl.pyd and most .pyd files)
+    # PyInstaller's automatic analysis may skip these if found in C:\Windows\System32,
+    # assuming they're present on the target system — but not all users have the
+    # VC++ Redistributable installed. Bundling from the Python root is safer.
+    for vc_dll in ("VCRUNTIME140.dll", "VCRUNTIME140_1.dll", "MSVCP140.dll"):
+        vc_path = Path(sys.base_prefix) / vc_dll
+        if vc_path.exists():
+            _extra_binaries.append((str(vc_path), "."))
 
 # ---------------------------------------------------------------------------
 # Paths

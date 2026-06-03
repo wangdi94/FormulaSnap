@@ -20,8 +20,16 @@ import os
 import sys
 
 if sys.platform == "win32" and hasattr(sys, "_MEIPASS"):
-    # Add the PyInstaller temp directory to the DLL search path so that
-    # C extensions (e.g. _ssl.pyd) can find their shared library
-    # dependencies (e.g. libcrypto-3-x64.dll, libssl-3-x64.dll).
     meipass = sys._MEIPASS  # type: ignore[attr-defined]
+
+    # 1) Modern approach (Python 3.8+): register with AddDllDirectory
+    #    Affects LoadLibraryEx(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS).
     os.add_dll_directory(meipass)
+
+    # 2) Legacy fallback: prepend to %PATH%
+    #    Works on ALL Python/Windows versions. Also covers edge cases
+    #    where subprocesses spawned by uvicorn need the same DLL resolution.
+    meipass = os.path.normpath(meipass)
+    old_path = os.environ.get("PATH", "")
+    if meipass not in old_path.split(os.pathsep):
+        os.environ["PATH"] = meipass + os.pathsep + old_path
