@@ -7,31 +7,34 @@ Build command:
 Output: dist/formulasnap-sidecar (single executable)
 """
 
+import glob
 import os
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 # ---------------------------------------------------------------------------
-# Platform-aware extra binaries (Windows: bundle OpenSSL DLLs)
+# Platform-aware extra binaries (Windows: bundle OpenSSL DLLs + SSL .pyd)
 # ---------------------------------------------------------------------------
 _extra_binaries = []
+_ssl_hidden = []  # default for non-Windows; populated below on win32
 if sys.platform == "win32":
     python_dll_dir = Path(sys.base_prefix) / "DLLs"
-    for dll_name in [
-        "libcrypto-3.dll", "libssl-3.dll",
-        "libcrypto-1_1.dll", "libssl-1_1.dll",
-        "libcrypto-3-x64.dll", "libssl-3-x64.dll",
-    ]:
-        dll_path = python_dll_dir / dll_name
-        if dll_path.exists():
-            _extra_binaries.append((str(dll_path), "."))
+    # Use glob to catch ALL OpenSSL DLL naming variants:
+    #   libcrypto-1_1-x64.dll, libcrypto-1_1.dll, libcrypto-3-x64.dll, ...
+    # Hard-coded names risk missing the -x64 suffix variant (Python 3.10/3.11).
+    for pattern in ("libcrypto-*.dll", "libssl-*.dll"):
+        for dll_path in glob.glob(str(python_dll_dir / pattern)):
+            _extra_binaries.append((dll_path, "."))
     # Collect C extension .pyd files for SSL (ssl.py -> _ssl.pyd)
-    for pyd_name in ["_ssl.pyd", "_socket.pyd", "_hashlib.pyd"]:
+    for pyd_name in ("_ssl.pyd", "_socket.pyd", "_hashlib.pyd"):
         pyd_path = python_dll_dir / pyd_name
         if pyd_path.exists():
             _extra_binaries.append((str(pyd_path), "."))
+    # Nuclear option: ensure PyInstaller collects ALL ssl binary deps
+    _ssl_datas, _ssl_binaries, _ssl_hidden = collect_all("ssl")
+    _extra_binaries.extend(_ssl_binaries)
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -49,6 +52,8 @@ a = Analysis(
     hiddenimports=[
         # --- uvicorn (all submodules — auto-discovered to avoid missing imports) ---
         *collect_submodules("uvicorn"),
+        # --- SSL: collect_all ensures _ssl, _socket, _hashlib, etc. are included ---
+        *_ssl_hidden,
         "fastapi",
         "pydantic",
         "httpx",
@@ -63,11 +68,6 @@ a = Analysis(
         # --- PIL / Pillow (used by pix2text) ---
         "PIL",
         "PIL.Image",
-        # --- SSL (Windows DLL bundling + C extension hook) ---
-        "ssl",
-        "_ssl",
-        "_socket",
-        "_hashlib",
         # --- OCR engine SDKs ---
         "anthropic",
         "openai",
