@@ -15,6 +15,16 @@ from pathlib import Path
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 # ---------------------------------------------------------------------------
+# Extra data files (platform-independent)
+# ---------------------------------------------------------------------------
+_extra_datas = []
+try:
+    import certifi
+    _extra_datas.append((certifi.where(), "certifi"))
+except ImportError:
+    pass
+
+# ---------------------------------------------------------------------------
 # Platform-aware extra binaries (Windows: bundle OpenSSL DLLs + SSL .pyd)
 # ---------------------------------------------------------------------------
 _extra_binaries = []
@@ -56,7 +66,7 @@ a = Analysis(
     [str(ROOT / "sidecar" / "main.py")],
     pathex=[str(ROOT)],
     binaries=_extra_binaries,
-    datas=[],
+    datas=_extra_datas,
     hiddenimports=[
         # --- uvicorn (all submodules — auto-discovered to avoid missing imports) ---
         *collect_submodules("uvicorn"),

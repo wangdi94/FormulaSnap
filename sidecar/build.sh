@@ -70,6 +70,25 @@ cd "$SCRIPT_DIR"
 pyinstaller pyinstaller.spec --noconfirm --clean
 
 # ---------------------------------------------------------------------------
+# Verify bundle contents (check required libs are inside the binary)
+# ---------------------------------------------------------------------------
+echo "==> 验证 bundle 内容..."
+PYINSTALLER_BINARY="$SCRIPT_DIR/dist/${BINARY_NAME}"
+if ! python -m PyInstaller.utils.cliutils.archive_viewer "$PYINSTALLER_BINARY" -l | grep -q "_ssl\."; then
+    echo "ERROR: bundle 中缺少 _ssl" >&2
+    exit 1
+fi
+if ! python -m PyInstaller.utils.cliutils.archive_viewer "$PYINSTALLER_BINARY" -l | grep -q "libcrypto"; then
+    echo "ERROR: bundle 中缺少 libcrypto" >&2
+    exit 1
+fi
+if ! python -m PyInstaller.utils.cliutils.archive_viewer "$PYINSTALLER_BINARY" -l | grep -q "libssl"; then
+    echo "ERROR: bundle 中缺少 libssl" >&2
+    exit 1
+fi
+echo "==> Bundle 验证通过"
+
+# ---------------------------------------------------------------------------
 # Copy output to Tauri binaries directory
 # ---------------------------------------------------------------------------
 echo "==> Copying binary to ${OUTPUT_DIR}/"
