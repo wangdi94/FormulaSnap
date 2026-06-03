@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock, AsyncMock
@@ -323,3 +325,47 @@ def test_ocr_rate_limit_before_call(client):
 
     assert response.status_code == 429
     mock_engine.recognize.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Timeout handling
+# ---------------------------------------------------------------------------
+
+
+def test_ocr_endpoint_timeout_returns_504(client):
+    """Verify that a slow engine triggers timeout → HTTP 504."""
+    async def _fake_wait_for(coro, *, timeout=None):
+        coro.close()
+        raise asyncio.TimeoutError()
+
+    with patch("sidecar.api.server.get_engine") as mock_get_engine:
+        mock_engine = MagicMock()
+        mock_engine.recognize = AsyncMock(return_value=MagicMock())
+        mock_get_engine.return_value = mock_engine
+
+        with patch.object(asyncio, "wait_for", side_effect=_fake_wait_for):
+            response = client.post(
+                "/api/ocr",
+                json={"image_base64": "dGVzdA==", "backend": "pix2text"},
+            )
+            assert response.status_code == 504
+            detail = response.json()["detail"]
+            assert detail["error"] == "TIMEOUT"
+            assert "120s" in detail["message"]
+
+
+def test_ocr_endpoint_timeout_error_caught_directly(client):
+    """Verify that asyncio.TimeoutError from engine is caught → HTTP 504."""
+    with patch("sidecar.api.server.get_engine") as mock_get_engine:
+        mock_engine = MagicMock()
+        mock_engine.recognize = AsyncMock(side_effect=asyncio.TimeoutError)
+        mock_get_engine.return_value = mock_engine
+
+        response = client.post(
+            "/api/ocr",
+            json={"image_base64": "dGVzdA==", "backend": "pix2text"},
+        )
+        assert response.status_code == 504
+        detail = response.json()["detail"]
+        assert detail["error"] == "TIMEOUT"
+        assert "120s" in detail["message"]

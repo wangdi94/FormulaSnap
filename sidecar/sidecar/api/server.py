@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import AsyncIterator, Optional
+import asyncio
 import base64
 import binascii
 import logging
@@ -163,7 +164,9 @@ async def ocr_endpoint(request: OcrRequest):
         # Pre-call rate limit check — prevents API calls when over limit
         cost_tracker.check_limit_only()
 
-        result = await engine.recognize(image_bytes, OcrOptions())
+        result = await asyncio.wait_for(
+            engine.recognize(image_bytes, OcrOptions()), timeout=120
+        )
 
         tokens = result.cost_estimate.tokens_used if result.cost_estimate else 0
         cost = result.cost_estimate.estimated_cost_usd if result.cost_estimate else 0.0
@@ -179,6 +182,11 @@ async def ocr_endpoint(request: OcrRequest):
             backend=result.backend,
             timing_ms=result.timing_ms,
             cost_estimate=result.cost_estimate.__dict__ if result.cost_estimate else None,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail={"error": "TIMEOUT", "message": "OCR request timed out after 120s"},
         )
     except RateLimitExceeded as e:
         raise HTTPException(
