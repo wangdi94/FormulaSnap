@@ -23,7 +23,7 @@ pub struct DbConn(pub Mutex<rusqlite::Connection>);
 /// 前端可通过 invoke('capture_screen_base64') 调用。
 #[tauri::command]
 fn capture_screen_base64() -> Result<String, String> {
-    let png_bytes = screenshot::capture_screen().map_err(|e| e.to_string())?;
+    let png_bytes = screenshot::capture_screen()?;
     use base64::Engine;
     Ok(base64::engine::general_purpose::STANDARD.encode(&png_bytes))
 }
@@ -31,7 +31,7 @@ fn capture_screen_base64() -> Result<String, String> {
 /// 截取指定区域并返回 base64 编码的 PNG 图片。
 #[tauri::command]
 fn capture_region_base64(x: u32, y: u32, width: u32, height: u32) -> Result<String, String> {
-    let png_bytes = screenshot::capture_region(x, y, width, height).map_err(|e| e.to_string())?;
+    let png_bytes = screenshot::capture_region(x, y, width, height)?;
     use base64::Engine;
     Ok(base64::engine::general_purpose::STANDARD.encode(&png_bytes))
 }
@@ -39,7 +39,7 @@ fn capture_region_base64(x: u32, y: u32, width: u32, height: u32) -> Result<Stri
 /// 截取全屏并返回 base64（供区域选择使用）。
 #[tauri::command]
 fn capture_screen_for_selection() -> Result<String, String> {
-    let png_bytes = screenshot::capture_screen().map_err(|e| e.to_string())?;
+    let png_bytes = screenshot::capture_screen()?;
     use base64::Engine;
     Ok(base64::engine::general_purpose::STANDARD.encode(&png_bytes))
 }
@@ -191,6 +191,12 @@ pub fn run() {
                 eprintln!("Failed to initialize logger: {}", e);
                 logger::init_stderr_fallback();
             }
+
+            let prev = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |panic_info| {
+                log::logger().flush();
+                prev(panic_info);
+            }));
 
             let db_path = app_dir.join("app.db");
 
