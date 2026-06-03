@@ -81,6 +81,8 @@ a = Analysis(
         "openai",
         "google.genai",
         "google.genai.types",
+        # --- setuptools/pkg_resources transitive deps ---
+        "appdirs",
     ],
     hookspath=[],
     hooksconfig={},
