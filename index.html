@@ -53,11 +53,9 @@
         var pre = el.querySelector('pre');
         if (pre) pre.textContent += (pre.textContent ? '\n---\n' : '') + msg;
       }
-      // React 挂载后隐藏 fallback
-      document.addEventListener('DOMContentLoaded', function() {
-        var fb = document.getElementById('loading-fallback');
-        if (fb) fb.classList.add('hidden-init');
-      });
+      // React 挂载后自然替换 #root 内容，fallback 自动消失。
+      // 如果 React 没挂载，fallback 保持可见，JS 错误也显示在页面上。
+      // 由 main.tsx 或 React 组件在首次渲染后显式隐藏 fallback：
     </script>
   </head>
   <body>
