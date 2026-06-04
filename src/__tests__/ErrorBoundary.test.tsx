@@ -85,6 +85,9 @@ describe('ErrorBoundary', () => {
     // Error detail summary text
     expect(screen.getByText('错误详情')).toBeInTheDocument();
     // Error message should be in the details
-    expect(screen.getByText('测试错误')).toBeInTheDocument();
+    // Use regex match because <pre> contains multiple text nodes
+    // (error.message + '\n\n' + error.stack), and getByText string
+    // matching may not span across text node boundaries.
+    expect(screen.getByText(/测试错误/)).toBeInTheDocument();
   });
 });
