@@ -62,13 +62,16 @@ REM ---------------------------------------------------------------------------
 echo ==^> 验证 bundle 内容...
 python -c "from PyInstaller.utils.cliutils import archive_viewer" 2>nul
 if errorlevel 1 (
-    echo   ^>^> archive_viewer 不可用，跳过 bundle 验证
+    echo   archive_viewer 不可用，跳过 bundle 验证
     goto :COPY
 )
 python -m PyInstaller.utils.cliutils.archive_viewer "%SCRIPT_DIR%\dist\%BINARY_NAME%.exe" -l > "%TEMP%\sidecar-bundle-list.txt" 2>nul
-findstr "_ssl" "%TEMP%\sidecar-bundle-list.txt" >nul && echo   ^>^> _ssl.pyd
-findstr "libcrypto" "%TEMP%\sidecar-bundle-list.txt" >nul && echo   ^>^> libcrypto
-findstr "libssl" "%TEMP%\sidecar-bundle-list.txt" >nul && echo   ^>^> libssl
+echo --- bundle TOC ---
+type "%TEMP%\sidecar-bundle-list.txt"
+echo --- end TOC ---
+for %%i in (_ssl libcrypto libssl VCRUNTIME140 _socket _hashlib) do (
+    findstr "%%i" "%TEMP%\sidecar-bundle-list.txt" >nul && echo   OK %%i || echo   MISSING %%i
+)
 echo ==^> Bundle 验证完成
 
 :COPY

@@ -75,19 +75,15 @@ pyinstaller pyinstaller.spec --noconfirm --clean
 echo "==> 验证 bundle 内容..."
 PYINSTALLER_BINARY="$SCRIPT_DIR/dist/${BINARY_NAME}"
 if python -c "from PyInstaller.utils.cliutils import archive_viewer" 2>/dev/null; then
+    echo "--- bundle TOC ---"
+    python -m PyInstaller.utils.cliutils.archive_viewer "$PYINSTALLER_BINARY" -l 2>/dev/null || true
+    echo "--- end TOC ---"
     TOC="$(python -m PyInstaller.utils.cliutils.archive_viewer "$PYINSTALLER_BINARY" -l 2>/dev/null || true)"
-    # _ssl: C extension, listed by Python module name (no extension)
-    if echo "$TOC" | grep -q -E '\b_ssl\b'; then
-        echo "  ✓ _ssl"
-    else
-        echo "  ⚠ _ssl 未在 bundle 中找到"
-    fi
-    # libcrypto/libssl: shared library dependencies
-    for lib in libcrypto libssl; do
-        if echo "$TOC" | grep -q -E "\b${lib}"; then
-            echo "  ✓ ${lib}"
+    for item in "_ssl" "libcrypto" "libssl" "VCRUNTIME140" "_socket" "_hashlib"; do
+        if echo "$TOC" | grep -q -E "\b${item}"; then
+            echo "  ✓ ${item}"
         else
-            echo "  ⚠ ${lib} 未在 bundle 中找到"
+            echo "  ⚠ ${item} 未找到"
         fi
     done
 else

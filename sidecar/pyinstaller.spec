@@ -53,6 +53,11 @@ if sys.platform == "win32":
         vc_path = Path(sys.base_prefix) / vc_dll
         if vc_path.exists():
             _extra_binaries.append((str(vc_path), "."))
+    # Diagnostic: print what DLLs were found for SSL
+    print(f"[DIAG] Python base prefix: {sys.base_prefix}")
+    print(f"[DIAG] OpenSSL DLLs found ({len(_extra_binaries)} binaries):")
+    for src, dst in _extra_binaries:
+        print(f"  {Path(src).name} -> {dst}")
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -70,8 +75,14 @@ a = Analysis(
     hiddenimports=[
         # --- uvicorn (all submodules — auto-discovered to avoid missing imports) ---
         *collect_submodules("uvicorn"),
-        # --- SSL: collect_all ensures _ssl, _socket, _hashlib, etc. are included ---
+        # --- SSL: frozen importer MUST know about ssl/_ssl. ---
+        # collect_all('ssl') returns EMPTY (ssl is a module, not a package),
+        # so _ssl_hidden is just [] — we add explicit entries here.
         *_ssl_hidden,
+        "ssl",
+        "_ssl",
+        "_socket",
+        "_hashlib",
         "fastapi",
         "pydantic",
         "httpx",
