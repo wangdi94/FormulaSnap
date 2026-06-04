@@ -10,24 +10,52 @@ interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
+  globalErrors: string[];
 }
 
 export default class ErrorBoundary extends Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
 > {
+  private _onerrorHandler: ((event: ErrorEvent) => void) | null = null;
+  private _rejectionHandler: ((event: PromiseRejectionEvent) => void) | null = null;
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, globalErrors: [] };
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
+    return { hasError: true, error, globalErrors: [] };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error("ErrorBoundary caught:", error, errorInfo);
     this.props.onError?.(error, errorInfo);
+  }
+
+  componentDidMount(): void {
+    this._onerrorHandler = (event: ErrorEvent) => {
+      const text = event.error?.stack || event.message;
+      console.error("Global error:", text);
+      this.setState((prev) => ({
+        globalErrors: [...prev.globalErrors, text.substring(0, 500)].slice(-5),
+      }));
+    };
+    this._rejectionHandler = (event: PromiseRejectionEvent) => {
+      const text = event.reason?.stack || event.reason?.message || String(event.reason);
+      console.error("Unhandled rejection:", text);
+      this.setState((prev) => ({
+        globalErrors: [...prev.globalErrors, text.substring(0, 500)].slice(-5),
+      }));
+    };
+    window.addEventListener("error", this._onerrorHandler);
+    window.addEventListener("unhandledrejection", this._rejectionHandler);
+  }
+
+  componentWillUnmount(): void {
+    if (this._onerrorHandler) window.removeEventListener("error", this._onerrorHandler);
+    if (this._rejectionHandler) window.removeEventListener("unhandledrejection", this._rejectionHandler);
   }
 
   handleRetry = (): void => {
@@ -87,6 +115,17 @@ export default class ErrorBoundary extends Component<
               </summary>
               <pre className="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-md text-xs text-gray-700 dark:text-gray-300 overflow-auto">
                 {this.state.error.message}
+                {this.state.error.stack && <>{"\n\n"}{this.state.error.stack}</>}
+              </pre>
+            </details>
+          )}
+          {this.state.globalErrors.length > 0 && (
+            <details className="mt-2 text-left max-w-md w-full">
+              <summary className="text-sm text-yellow-600 dark:text-yellow-400 cursor-pointer hover:text-yellow-700 dark:hover:text-yellow-300">
+                全局错误 ({this.state.globalErrors.length})
+              </summary>
+              <pre className="mt-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-md text-xs text-gray-700 dark:text-gray-300 overflow-auto">
+                {this.state.globalErrors.join("\n---\n")}
               </pre>
             </details>
           )}
