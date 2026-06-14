@@ -127,6 +127,8 @@
   "backend.gemini": "Gemini",
   "backend.auto": "Auto",
   "status.ready": "Ready",
+  "status.sidecar_error": "Sidecar Error",
+  "status.sidecar_connecting": "Connecting to Sidecar...",
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.loading": "Loading...",

@@ -214,4 +214,25 @@ export async function getApiKeys(): Promise<KeysResponse> {
   return request<KeysResponse>('/api/keys');
 }
 
+/**
+ * 健康检查（带超时）
+ *
+ * 用于检测 sidecar 是否就绪，超时返回 false
+ */
+export async function checkSidecarHealth(timeoutMs: number = 3000): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const resp = await fetch(`${SIDECAR_BASE_URL}/health`, {
+      signal: controller.signal,
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 

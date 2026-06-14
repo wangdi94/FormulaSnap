@@ -31,17 +31,24 @@ _extra_binaries = []
 _ssl_hidden = []  # default for non-Windows; populated below on win32
 if sys.platform == "win32":
     python_dll_dir = Path(sys.base_prefix) / "DLLs"
+    # Also check the base prefix root (some Python installs put DLLs there)
+    dll_search_dirs = [python_dll_dir, Path(sys.base_prefix)]
     # Use glob to catch ALL OpenSSL DLL naming variants:
     #   libcrypto-1_1-x64.dll, libcrypto-1_1.dll, libcrypto-3-x64.dll, ...
-    # Hard-coded names risk missing the -x64 suffix variant (Python 3.10/3.11).
-    for pattern in ("libcrypto-*.dll", "libssl-*.dll"):
-        for dll_path in glob.glob(str(python_dll_dir / pattern)):
-            _extra_binaries.append((dll_path, "."))
+    found_dlls = set()
+    for search_dir in dll_search_dirs:
+        for pattern in ("libcrypto-*.dll", "libssl-*.dll"):
+            for dll_path in glob.glob(str(search_dir / pattern)):
+                if dll_path not in found_dlls:
+                    found_dlls.add(dll_path)
+                    _extra_binaries.append((dll_path, "."))
     # Collect C extension .pyd files for SSL (ssl.py -> _ssl.pyd)
     for pyd_name in ("_ssl.pyd", "_socket.pyd", "_hashlib.pyd"):
-        pyd_path = python_dll_dir / pyd_name
-        if pyd_path.exists():
-            _extra_binaries.append((str(pyd_path), "."))
+        for search_dir in dll_search_dirs:
+            pyd_path = search_dir / pyd_name
+            if pyd_path.exists():
+                _extra_binaries.append((str(pyd_path), "."))
+                break
     # Nuclear option: ensure PyInstaller collects ALL ssl binary deps
     _ssl_datas, _ssl_binaries, _ssl_hidden = collect_all("ssl")
     _extra_binaries.extend(_ssl_binaries)
@@ -50,9 +57,11 @@ if sys.platform == "win32":
     # assuming they're present on the target system — but not all users have the
     # VC++ Redistributable installed. Bundling from the Python root is safer.
     for vc_dll in ("VCRUNTIME140.dll", "VCRUNTIME140_1.dll", "MSVCP140.dll"):
-        vc_path = Path(sys.base_prefix) / vc_dll
-        if vc_path.exists():
-            _extra_binaries.append((str(vc_path), "."))
+        for search_dir in dll_search_dirs:
+            vc_path = search_dir / vc_dll
+            if vc_path.exists():
+                _extra_binaries.append((str(vc_path), "."))
+                break
     # Diagnostic: print what DLLs were found for SSL
     print(f"[DIAG] Python base prefix: {sys.base_prefix}")
     print(f"[DIAG] OpenSSL DLLs found ({len(_extra_binaries)} binaries):")

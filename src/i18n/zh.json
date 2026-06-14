@@ -127,6 +127,8 @@
   "backend.gemini": "Gemini",
   "backend.auto": "自动选择",
   "status.ready": "就绪",
+  "status.sidecar_error": "Sidecar 错误",
+  "status.sidecar_connecting": "正在连接 Sidecar...",
   "common.cancel": "取消",
   "common.close": "关闭",
   "common.loading": "加载中...",
