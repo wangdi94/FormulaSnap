@@ -6,6 +6,16 @@ vi.mock('../lib/i18n', () => ({
   t: (key: string) => key,
 }));
 
+// Mock Tauri event listen (returns cleanup function)
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn().mockResolvedValue(vi.fn()),
+}));
+
+// Mock sidecarClient
+vi.mock('../lib/sidecarClient', () => ({
+  checkSidecarHealth: vi.fn().mockResolvedValue(true),
+}));
+
 // Mock the settings module which uses Tauri invoke
 vi.mock('../lib/settings', () => ({
   loadSettings: vi.fn().mockResolvedValue({

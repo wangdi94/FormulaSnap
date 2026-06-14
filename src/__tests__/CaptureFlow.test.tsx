@@ -31,6 +31,7 @@ vi.mock('../lib/i18n', () => ({
 // Mock sidecarClient
 vi.mock('../lib/sidecarClient', () => ({
   callOcr: vi.fn(),
+  checkSidecarHealth: vi.fn().mockResolvedValue(true),
   SidecarError: class extends Error {
     status: number;
     detail?: unknown;
@@ -67,10 +68,11 @@ describe('CaptureFlow', () => {
   it('注册 Tauri event listeners', async () => {
     render(<CaptureFlow />);
     const { listen } = await import('@tauri-apps/api/event');
-    // Should listen for at least 3 events: open-selection, selection-result, selection-cancelled
-    expect(listen).toHaveBeenCalledTimes(3);
+    expect(listen).toHaveBeenCalledTimes(5);
     expect(listen).toHaveBeenCalledWith('open-selection', expect.any(Function));
     expect(listen).toHaveBeenCalledWith('selection-result', expect.any(Function));
     expect(listen).toHaveBeenCalledWith('selection-cancelled', expect.any(Function));
+    expect(listen).toHaveBeenCalledWith('sidecar://ready', expect.any(Function));
+    expect(listen).toHaveBeenCalledWith('sidecar://error', expect.any(Function));
   });
 });
