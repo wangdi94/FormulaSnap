@@ -1,6 +1,7 @@
 use std::io::Write;
 use std::net::TcpStream;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
@@ -9,8 +10,8 @@ use tauri_plugin_shell::ShellExt;
 /// Sidecar HTTP 端口（与 Python sidecar 的 uvicorn 配置一致）
 pub const SIDECAR_PORT: u16 = 8477;
 
-/// 健康检查超时时间
-const HEALTH_TIMEOUT: Duration = Duration::from_secs(30);
+/// 健康检查超时时间（60s，Windows 上 PyInstaller 解压+导入可能较慢）
+const HEALTH_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// 健康检查轮询间隔
 const HEALTH_INTERVAL: Duration = Duration::from_millis(500);
@@ -113,6 +114,14 @@ pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
         health_handle: Mutex::new(None),
     });
 
+    // 共享退出码：i32::MAX = 进程仍在运行，其他值 = 已退出（含退出码）
+    // 健康检查线程据此提前终止，避免等待完整超时
+    let process_exit_code = Arc::new(AtomicI32::new(i32::MAX));
+    // 捕获 sidecar 最后的 stderr 输出，用于诊断
+    let stderr_lines: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let pec_events = process_exit_code.clone();
+    let stderr_events = stderr_lines.clone();
     tauri::async_runtime::spawn(async move {
         let mut rx = rx;
         while let Some(event) = rx.recv().await {
@@ -124,11 +133,24 @@ pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
                 }
                 CommandEvent::Stderr(data) => {
                     if let Ok(text) = String::from_utf8(data) {
-                        log::warn!("[sidecar] {}", text.trim_end());
+                        let line = text.trim_end().to_string();
+                        log::warn!("[sidecar] {}", line);
+                        // 保留最后 20 行用于诊断
+                        let mut buf = stderr_events.lock().unwrap();
+                        buf.push(line);
+                        if buf.len() > 20 {
+                            buf.remove(0);
+                        }
                     }
                 }
                 CommandEvent::Terminated(payload) => {
                     log::info!("[sidecar] 进程退出，状态码: {:?}", payload.code);
+                    pec_events.store(payload.code.unwrap_or(-1), Ordering::SeqCst);
+                    // 进程退出后把 stderr 也打印出来，方便日志排查
+                    let buf = stderr_events.lock().unwrap();
+                    for line in buf.iter() {
+                        log::error!("[sidecar stderr] {line}");
+                    }
                     break;
                 }
                 CommandEvent::Error(err) => {
@@ -140,10 +162,12 @@ pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
     });
 
     let app_handle = app.clone();
+    let pec_health = process_exit_code.clone();
+    let stderr_health = stderr_lines.clone();
     let handle = std::thread::spawn(move || {
         let url = format!("http://localhost:{}/health", SIDECAR_PORT);
 
-        match poll_health(&url, HEALTH_TIMEOUT, HEALTH_INTERVAL) {
+        match poll_health(&url, HEALTH_TIMEOUT, HEALTH_INTERVAL, &pec_health) {
             Ok(()) => {
                 log::info!("Python sidecar 已就绪 (port {})", SIDECAR_PORT);
                 if let Err(e) = app_handle.emit("sidecar://ready", ()) {
@@ -151,8 +175,23 @@ pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
                 }
             }
             Err(e) => {
-                log::error!("健康检查失败: {}", e);
-                if let Err(e) = app_handle.emit("sidecar://error", e) {
+                // 如果进程已退出，附上 stderr 输出帮助定位原因
+                let code = pec_health.load(Ordering::SeqCst);
+                let error_msg = if code != i32::MAX {
+                    let stderr = stderr_health.lock().unwrap();
+                    let stderr_text = stderr.join(" | ");
+                    if stderr_text.is_empty() {
+                        format!("Sidecar 进程意外退出（退出码: {code}），请查看应用日志获取详细信息")
+                    } else {
+                        format!(
+                            "Sidecar 进程意外退出（退出码: {code}）: {stderr_text}"
+                        )
+                    }
+                } else {
+                    e
+                };
+                log::error!("健康检查失败: {error_msg}");
+                if let Err(e) = app_handle.emit("sidecar://error", &error_msg) {
                     log::warn!("发送 sidecar://error 事件失败: {}", e);
                 }
             }
@@ -173,7 +212,15 @@ pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
 }
 
 /// 同步轮询健康检查端点，直到成功或超时。
-fn poll_health(url: &str, timeout: Duration, interval: Duration) -> Result<(), String> {
+///
+/// 如果 `process_exit_code` 的值不是 `i32::MAX`（sidecar 进程已退出），则提前
+/// 返回错误并携带退出码，避免等待完整的超时时间。
+fn poll_health(
+    url: &str,
+    timeout: Duration,
+    interval: Duration,
+    process_exit_code: &AtomicI32,
+) -> Result<(), String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(3))
         .build()
@@ -186,6 +233,14 @@ fn poll_health(url: &str, timeout: Duration, interval: Duration) -> Result<(), S
             return Err(format!(
                 "健康检查超时 ({:.0}s)，sidecar 未能在规定时间内就绪",
                 timeout.as_secs_f64()
+            ));
+        }
+
+        // 检测到进程已退出，立即返回（不等待完整超时）
+        let code = process_exit_code.load(Ordering::SeqCst);
+        if code != i32::MAX {
+            return Err(format!(
+                "Sidecar 进程意外退出（退出码: {code}），请查看应用日志获取详细信息"
             ));
         }
 
