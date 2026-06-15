@@ -9,7 +9,7 @@ export type OcrBackend = 'pix2text' | 'mathpix' | 'openai' | 'claude' | 'gemini'
 
 export interface OcrRequest {
   image_base64: string;
-  backend: OcrBackend;
+  backend?: OcrBackend | 'auto';
 }
 
 export interface OcrResult {
@@ -20,9 +20,11 @@ export interface OcrResult {
   cost_estimate?: CostEstimate;
 }
 
+export type OcrResponse = OcrResult;
+
 export interface CostEstimate {
-  tokens_used: number;
-  estimated_cost_usd: number;
+  tokens_used?: number;
+  estimated_cost_usd?: number;
 }
 
 export interface OcrError {

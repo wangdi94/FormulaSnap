@@ -1,14 +1,18 @@
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock, AsyncMock
 
-from sidecar.api.server import app, register_engine, _engines, get_engine
-from sidecar.ocr_engines.interface import (
-    ValidationResult, ApiKeyError, RateLimitError, NetworkError, OcrError,
-)
+from sidecar.api.server import _engines, app, get_engine, register_engine
 from sidecar.ocr_engines.cost_tracker import cost_tracker
+from sidecar.ocr_engines.interface import (
+    ApiKeyError,
+    NetworkError,
+    OcrError,
+    RateLimitError,
+    ValidationResult,
+)
 
 
 @pytest.fixture
@@ -32,7 +36,10 @@ def clear_engines():
 def test_health_endpoint(client):
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    data = response.json()
+    assert data["status"] == "ok"
+    assert "engines" in data
+    assert isinstance(data["engines"], list)
 
 
 def test_shutdown_endpoint(client):
@@ -45,6 +52,7 @@ def test_shutdown_endpoint(client):
 
 def test_shutdown_graceful(client):
     import asyncio
+
     from sidecar.api.server import lifespan
 
     with patch("sidecar.api.server.os._exit"):
@@ -270,8 +278,9 @@ def test_ocr_empty_image_returns_400(client):
 
 
 def test_ocr_oversized_image_returns_413():
-    from sidecar.api.server import validate_image
     from fastapi import HTTPException
+
+    from sidecar.api.server import validate_image
 
     with pytest.raises(HTTPException) as exc_info:
         validate_image(b"x" * 15_000_001)

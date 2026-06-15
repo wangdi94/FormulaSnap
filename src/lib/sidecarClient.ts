@@ -7,8 +7,8 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { t } from './i18n';
-import type { OcrBackend } from '../types/ocr';
-export type { OcrBackend } from '../types/ocr';
+import type { OcrBackend, OcrResponse } from '../types/ocr';
+export type { OcrBackend, OcrRequest, OcrResponse } from '../types/ocr';
 
 // ---------------------------------------------------------------------------
 // 端口初始化（运行时动态获取，支持 Tauri command + 环境变量 + 默认值 fallback）
@@ -39,25 +39,6 @@ export async function initSidecarPort(): Promise<void> {
 // 类型定义
 // ---------------------------------------------------------------------------
 
-/** OCR 请求参数 */
-export interface OcrRequest {
-  imageBase64: string;
-  backend?: OcrBackend | 'auto';
-}
-
-/** OCR 响应 */
-export interface OcrResponse {
-  latex: string;
-  confidence: number;
-  backend: OcrBackend;
-  timing_ms: number;
-  cost_estimate?: {
-    tokens_used?: number;
-    estimated_cost_usd?: number;
-  };
-}
-
-/** 使用统计 */
 export interface StatsResponse {
   total_calls: number;
   total_tokens: number;

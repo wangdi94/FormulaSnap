@@ -95,16 +95,16 @@ describe('StatsResponse 接口', () => {
 // ---------------------------------------------------------------------------
 
 describe('OcrRequest 接口', () => {
-  it('imageBase64 为必需 string', () => {
-    const req: OcrRequest = { imageBase64: 'abc123' };
-    expect(req.imageBase64).toBe('abc123');
+  it('image_base64 为必需 string', () => {
+    const req: OcrRequest = { image_base64: 'abc123' };
+    expect(req.image_base64).toBe('abc123');
   });
 
   it('backend 为可选 string', () => {
-    const req1: OcrRequest = { imageBase64: 'abc' };
+    const req1: OcrRequest = { image_base64: 'abc' };
     expect(req1.backend).toBeUndefined();
 
-    const req2: OcrRequest = { imageBase64: 'abc', backend: 'pix2text' };
+    const req2: OcrRequest = { image_base64: 'abc', backend: 'pix2text' };
     expect(req2.backend).toBe('pix2text');
   });
 });

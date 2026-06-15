@@ -512,3 +512,93 @@ class TestBatchWrite:
             assert mock_save.call_count == 1  # still only 1
             tracker.record_call("openai", 100, 0.001)
             assert mock_save.call_count == 2  # now 2
+
+
+# =========================================================================
+# Daily Count Optimization Tests
+# =========================================================================
+
+
+class TestDailyCount:
+    """Tests for incremental daily count cache."""
+
+    def test_daily_count_increments_incrementally(self):
+        """Each record_call increments today's count by 1."""
+        from datetime import datetime, timezone
+
+        day_start = datetime(2024, 6, 15, 10, 0, 0, tzinfo=timezone.utc).timestamp()
+        current_time = day_start
+        tracker = CostTracker(time_fn=lambda: current_time)
+
+        assert tracker.get_stats().calls_today == 0
+
+        tracker.record_call("openai", 100, 0.001)
+        current_time += 3.0
+        assert tracker.get_stats().calls_today == 1
+
+        tracker.record_call("mathpix", 200, 0.002)
+        current_time += 3.0
+        assert tracker.get_stats().calls_today == 2
+
+        tracker.record_call("claude", 300, 0.003)
+        assert tracker.get_stats().calls_today == 3
+
+    def test_daily_count_resets_cross_midnight(self):
+        """Count resets to 0 after UTC midnight, then increments from new day."""
+        from datetime import datetime, timezone
+
+        day1 = datetime(2024, 6, 15, 23, 59, 58, tzinfo=timezone.utc).timestamp()
+        current_time = day1
+        tracker = CostTracker(time_fn=lambda: current_time)
+
+        tracker.record_call("openai", 100, 0.001)
+        current_time += 1.0
+        tracker.record_call("openai", 100, 0.001)
+
+        assert tracker.get_stats().calls_today == 2
+
+        day2 = datetime(2024, 6, 16, 0, 0, 1, tzinfo=timezone.utc).timestamp()
+        current_time = day2
+
+        assert tracker.get_stats().calls_today == 0
+
+        tracker.record_call("openai", 100, 0.001)
+        assert tracker.get_stats().calls_today == 1
+
+    def test_daily_count_o1_after_record(self):
+        """After record_call, get_stats().calls_today uses cached counter (O(1)).
+
+        Verifies the counter stays correct without re-scanning all records.
+        """
+        from datetime import datetime, timezone
+
+        day_start = datetime(2024, 6, 15, 10, 0, 0, tzinfo=timezone.utc).timestamp()
+        current_time = day_start
+        tracker = CostTracker(time_fn=lambda: current_time)
+
+        for i in range(50):
+            tracker.record_call("openai", 100, 0.001)
+            current_time += 3.0
+
+        assert tracker.get_stats().calls_today == 50
+
+        for i in range(50):
+            tracker.record_call("mathpix", 200, 0.002)
+            current_time += 3.0
+
+        assert tracker.get_stats().calls_today == 100
+
+    def test_daily_count_resets_on_clear(self):
+        """reset() zeroes the daily count and refreshes the date stamp."""
+        from datetime import datetime, timezone
+
+        day_start = datetime(2024, 6, 15, 10, 0, 0, tzinfo=timezone.utc).timestamp()
+        current_time = day_start
+        tracker = CostTracker(time_fn=lambda: current_time)
+
+        tracker.record_call("openai", 100, 0.001)
+        tracker.record_call("openai", 100, 0.001)
+        assert tracker.get_stats().calls_today == 2
+
+        tracker.reset()
+        assert tracker.get_stats().calls_today == 0

@@ -1,16 +1,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { t, setLang, __resetLangCache } from '../lib/i18n';
+import { t, setLang, __resetLangCache, loadLang } from '../lib/i18n';
 
 describe('i18n', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
     __resetLangCache();
-    // Default: zh-CN locale for navigator.language
     Object.defineProperty(navigator, 'language', {
       value: 'zh-CN',
       configurable: true,
       writable: true,
     });
+    await loadLang('zh');
+    await loadLang('en');
   });
 
   describe('t()', () => {

@@ -133,6 +133,13 @@ class CostTracker:
         self._pending_count: int = 0
         self._last_write_time: float = self._time()
 
+        # Incremental daily count cache (avoids O(n) scan per call).
+        now_init = self._time()
+        self._today_date: str = datetime.fromtimestamp(
+            now_init, tz=timezone.utc
+        ).strftime("%Y-%m-%d")
+        self._today_count: int = 0
+
         # Persistence: load saved records from disk (if any).
         # Only enabled when using real time (time_fn is None) — test
         # callers that pass a custom time_fn skip file I/O.
@@ -231,6 +238,7 @@ class CostTracker:
         with self._lock:
             self._records.append(record)
             self._last_call_time = now
+            self._increment_daily_count(now)
             self._maybe_save(now)
 
         logger.debug(
@@ -303,6 +311,7 @@ class CostTracker:
             )
             self._records.append(record)
             self._last_call_time = now
+            self._increment_daily_count(now)
             self._maybe_save(now)
 
         logger.debug(
@@ -354,12 +363,27 @@ class CostTracker:
         with self._lock:
             self._records.clear()
             self._last_call_time = 0.0
+            self._today_count = 0
+            self._today_date = datetime.fromtimestamp(
+                self._time(), tz=timezone.utc
+            ).strftime("%Y-%m-%d")
 
     # ------------------------------------------------------------------
     # Internal Helpers
     # ------------------------------------------------------------------
 
     _EVICTION_SECS = 24 * 60 * 60  # 24 hours
+
+    def _increment_daily_count(self, now: float) -> None:
+        """Increment the cached daily call counter, resetting on date rollover.
+
+        Called internally while the lock is held.
+        """
+        today_str = datetime.fromtimestamp(now, tz=timezone.utc).strftime("%Y-%m-%d")
+        if today_str != self._today_date:
+            self._today_date = today_str
+            self._today_count = 0
+        self._today_count += 1
 
     def _evict_old_records(self, now: float) -> None:
         """Remove records older than 24 hours.
@@ -388,15 +412,38 @@ class CostTracker:
     def _count_calls_today(self, now: float) -> int:
         """Count calls made in the current UTC day.
 
+        Uses an incremental counter cached in ``_today_count`` for O(1)
+        lookup. Only falls back to a full scan when the UTC date rolls
+        over or eviction removes stale records.
+
         Args:
             now: Current Unix timestamp.
 
         Returns:
             Number of calls made today (UTC).
         """
+        today_str = datetime.fromtimestamp(now, tz=timezone.utc).strftime("%Y-%m-%d")
+        if today_str != self._today_date:
+            self._today_date = today_str
+            self._today_count = sum(
+                1
+                for r in self._records
+                if datetime.fromtimestamp(
+                    r.timestamp, tz=timezone.utc
+                ).strftime("%Y-%m-%d")
+                == today_str
+            )
+            return self._today_count
+
+        old_count = len(self._records)
         self._evict_old_records(now)
-        today_start = self._utc_day_start(now)
-        return sum(1 for r in self._records if r.timestamp >= today_start)
+        if len(self._records) < old_count:
+            today_start = self._utc_day_start(now)
+            self._today_count = sum(
+                1 for r in self._records if r.timestamp >= today_start
+            )
+
+        return self._today_count
 
     @staticmethod
     def _utc_day_start(timestamp: float) -> float:
@@ -497,6 +544,11 @@ class CostTracker:
                     loaded += 1
 
             logger.info("Loaded %d cost records from %s", loaded, self._data_file)
+
+            today_start = self._utc_day_start(self._time())
+            self._today_count = sum(
+                1 for r in self._records if r.timestamp >= today_start
+            )
         except Exception:
             logger.warning(
                 "Failed to load cost stats from %s", self._data_file, exc_info=True,

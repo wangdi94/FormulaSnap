@@ -1,16 +1,21 @@
-"""Tests for key_manager.py — Fernet alias and restore_master_key.
+"""Tests for key_manager.py — Fernet alias, restore_master_key, and cache.
 
 Covers:
 - _Fernet import alias availability
 - restore_master_key error handling (NameError regression)
 - generate_key() static method
+- KeyManager in-memory TTL cache (hit, expiry, invalidation)
 """
 
+import time
+from unittest.mock import MagicMock
+
 import pytest
-from pathlib import Path
 
 from sidecar.ocr_engines.key_manager import (
     EncryptedFileBackend,
+    KeyBackend,
+    KeyManager,
     _Fernet,
 )
 
@@ -94,3 +99,94 @@ class TestEncryptedFileBackend:
         # Verify the stored key is the new key
         stored = (tmp_path / "master.key").read_bytes().strip()
         assert stored == new_key
+
+
+class _CountingBackend(KeyBackend):
+    """Mock backend that tracks how many times get_key is called."""
+
+    def __init__(self, return_value: str = "test-key-123") -> None:
+        self._value = return_value
+        self.get_key_calls = 0
+
+    def get_key(self, service: str, key_name: str) -> str | None:
+        self.get_key_calls += 1
+        return self._value
+
+    def set_key(self, service: str, key_name: str, key_value: str) -> None:
+        self._value = key_value
+
+    def delete_key(self, service: str, key_name: str) -> bool:
+        had = self._value is not None
+        self._value = None
+        return had
+
+
+def _make_file_backend() -> MagicMock:
+    fb = MagicMock()
+    fb.get_key.return_value = None
+    fb.delete_key.return_value = False
+    fb._load_keys.return_value = {}
+    return fb
+
+
+class TestKeyManagerCache:
+
+    def setup_method(self):
+        self.backend = _CountingBackend("cached-val")
+        self.file = _make_file_backend()
+        self.km = KeyManager(
+            keyring_backend=self.backend,
+            file_backend=self.file,
+            cache_ttl=60,
+        )
+
+    def test_cache_hit_skips_backend(self):
+        first = self.km.get_key("openai", "api_key")
+        second = self.km.get_key("openai", "api_key")
+
+        assert first == "cached-val"
+        assert second == "cached-val"
+        assert self.backend.get_key_calls == 1
+
+    def test_cache_different_keys_independent(self):
+        self.km.get_key("openai", "api_key")
+        assert self.backend.get_key_calls == 1
+
+        self.backend._value = "mathpix-val"
+        self.km.get_key("mathpix", "api_key")
+        assert self.backend.get_key_calls == 2
+
+        self.km.get_key("openai", "api_key")
+        self.km.get_key("mathpix", "api_key")
+        assert self.backend.get_key_calls == 2
+
+    def test_cache_expired_calls_backend_again(self):
+        km = KeyManager(
+            keyring_backend=self.backend,
+            file_backend=self.file,
+            cache_ttl=0.1,
+        )
+
+        km.get_key("openai", "api_key")
+        time.sleep(0.15)
+        km.get_key("openai", "api_key")
+
+        assert self.backend.get_key_calls == 2
+
+    def test_set_key_invalidates_cache(self):
+        self.km.get_key("openai", "api_key")
+        assert self.backend.get_key_calls == 1
+
+        self.km.set_key("openai", "api_key", "new-val")
+        self.km.get_key("openai", "api_key")
+
+        assert self.backend.get_key_calls == 2
+
+    def test_delete_key_invalidates_cache(self):
+        self.km.get_key("openai", "api_key")
+        assert self.backend.get_key_calls == 1
+
+        self.km.delete_key("openai", "api_key")
+        self.km.get_key("openai", "api_key")
+
+        assert self.backend.get_key_calls == 2

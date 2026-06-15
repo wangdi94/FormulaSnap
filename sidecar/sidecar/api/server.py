@@ -121,6 +121,11 @@ def register_engine(backend: str, engine: OcrBackend) -> None:
     _engines[backend] = engine
 
 
+def get_registered_engines() -> list[str]:
+    """Return list of currently registered engine names."""
+    return list(_engines.keys())
+
+
 def validate_image(image_bytes: bytes) -> None:
     """Validate decoded image bytes before passing to OCR engine."""
     if len(image_bytes) == 0:
@@ -142,7 +147,7 @@ def validate_image(image_bytes: bytes) -> None:
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "engines": list(_engines.keys())}
 
 
 @app.post("/shutdown")
@@ -240,6 +245,13 @@ async def stats_endpoint():
         daily_limit=stats.daily_limit,
         remaining_today=stats.remaining_today,
     )
+
+
+@app.get("/api/engines/status")
+async def engines_status_endpoint():
+    """Return status of registered OCR engines."""
+    registered = list(_engines.keys())
+    return {"registered": registered, "count": len(registered)}
 
 
 @app.post("/api/validate-config")

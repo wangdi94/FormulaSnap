@@ -77,4 +77,7 @@ npx tsc --noEmit --skipLibCheck  # Type check
 - `release.yml` uses `pnpm run build` — correctly triggers `prebuild` hook for version sync
 - Tauri bundles: `bundle.targets: "all"`, sidecar via `externalBin` (built by `sidecar/build.sh`)
 - CSP is configured with a full security policy (default-src + script-src + style-src + connect-src etc.) — not null
+  - **`'unsafe-inline'` in script-src**: REQUIRED. `index.html` contains inline `<script>` blocks for JS error handling fallback (lines 34-59). Note: Tauri's `withGlobalTauri` bridge scripts are injected via WebView's native API (`addScriptToExecuteOnLoad`/`WKUserScript`) and bypass CSP entirely — they do NOT need `unsafe-inline`. The requirement comes solely from the `index.html` inline script.
+  - **`'unsafe-inline'` in style-src**: REQUIRED. Two reasons: (1) `index.html` contains inline `<style>` for loading fallback UI; (2) **MathLive** (`mathlive: ^0.109.0`) dynamically generates `style` attributes on math field elements for formula rendering — this is a hard dependency confirmed by MathLive maintainer ([#2581](https://github.com/arnog/mathlive/issues/2581)). React `style={{ }}` props also contribute. Tailwind v4 via Vite plugin is zero-runtime and does NOT inject inline styles.
+  - **Additional directives**: `frame-src 'none'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'` — restrict iframe/plugin/form attack surface.
 - `pyinstaller.spec` has `console=True` — sidecar opens terminal window in production builds

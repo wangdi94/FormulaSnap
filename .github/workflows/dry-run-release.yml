@@ -3,6 +3,12 @@ name: Dry-Run Release
 on:
   pull_request:
     branches: [main]
+    paths:
+      - 'sidecar/**'
+      - 'src-tauri/**'
+      - 'src/**'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/dry-run-release.yml'
   workflow_dispatch:
 
 jobs:

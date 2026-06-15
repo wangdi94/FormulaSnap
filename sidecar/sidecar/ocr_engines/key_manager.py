@@ -23,7 +23,6 @@ Usage:
 
 from __future__ import annotations
 
-import base64
 import json
 import logging
 import os
@@ -35,10 +34,10 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional
 
 try:
-    from cryptography.fernet import Fernet as _Fernet, InvalidToken as _InvalidToken
+    from cryptography.fernet import Fernet as _Fernet
+    from cryptography.fernet import InvalidToken as _InvalidToken
 
     CRYPTOGRAPHY_AVAILABLE = True
 except ImportError:
@@ -76,7 +75,7 @@ class KeyBackend(ABC):
     """Abstract interface for API key storage backends."""
 
     @abstractmethod
-    def get_key(self, service: str, key_name: str) -> Optional[str]:
+    def get_key(self, service: str, key_name: str) -> str | None:
         """Retrieve an API key.
 
         Args:
@@ -143,7 +142,7 @@ class KeyringBackend(KeyBackend):
         """Whether the keyring backend is usable."""
         return self._available and self._keyring is not None
 
-    def get_key(self, service: str, key_name: str) -> Optional[str]:
+    def get_key(self, service: str, key_name: str) -> str | None:
         if not self.available:
             return None
         try:
@@ -191,7 +190,7 @@ class MacKeychainBackend(KeyBackend):
     `security` binary directly.
     """
 
-    def get_key(self, service: str, key_name: str) -> Optional[str]:
+    def get_key(self, service: str, key_name: str) -> str | None:
         if platform.system() != "Darwin":
             return None
 
@@ -243,7 +242,12 @@ class MacKeychainBackend(KeyBackend):
             process.communicate(input=key_value, timeout=10)
             if process.returncode != 0:
                 raise subprocess.CalledProcessError(process.returncode, "security")
-            logger.info("Stored key in Keychain for %s/%s (%s)", service, key_name, _mask_key(key_value))
+            logger.info(
+                "Stored key in Keychain for %s/%s (%s)",
+                service,
+                key_name,
+                _mask_key(key_value),
+            )
         except subprocess.SubprocessError as e:
             logger.error("Failed to store key in Keychain for %s/%s: %s", service, key_name, e)
             raise
@@ -288,7 +292,7 @@ class FileBackend(KeyBackend):
     The file is protected by filesystem permissions (owner-only read/write).
     """
 
-    def __init__(self, config_dir: Optional[Path] = None) -> None:
+    def __init__(self, config_dir: Path | None = None) -> None:
         if config_dir is None:
             config_dir = self._default_config_dir()
         self._config_dir = config_dir
@@ -322,7 +326,7 @@ class FileBackend(KeyBackend):
         if not self._config_file.exists():
             return {}
         try:
-            with open(self._config_file, "r") as f:
+            with open(self._config_file) as f:
                 return json.load(f)
         except (json.JSONDecodeError, OSError) as e:
             logger.error("Failed to load keys file: %s", e)
@@ -343,7 +347,7 @@ class FileBackend(KeyBackend):
     # multiple processes can corrupt keys.json. In this sidecar the file
     # backend is accessed exclusively from one uvicorn worker.
 
-    def get_key(self, service: str, key_name: str) -> Optional[str]:
+    def get_key(self, service: str, key_name: str) -> str | None:
         data = self._load_keys()
         service_keys = data.get(service, {})
         value = service_keys.get(key_name)
@@ -404,8 +408,8 @@ class EncryptedFileBackend(KeyBackend):
 
     def __init__(
         self,
-        config_dir: Optional[Path] = None,
-        master_key: Optional[bytes] = None,
+        config_dir: Path | None = None,
+        master_key: bytes | None = None,
     ) -> None:
         if not CRYPTOGRAPHY_AVAILABLE:
             raise ImportError(
@@ -540,7 +544,7 @@ class EncryptedFileBackend(KeyBackend):
             return
 
         try:
-            with open(plaintext_file, "r") as f:
+            with open(plaintext_file) as f:
                 data = json.load(f)
             if not data:
                 # Empty file, just mark as migrated
@@ -606,7 +610,7 @@ class EncryptedFileBackend(KeyBackend):
             logger.error("Failed to save encrypted keys file: %s", e)
             raise
 
-    def get_key(self, service: str, key_name: str) -> Optional[str]:
+    def get_key(self, service: str, key_name: str) -> str | None:
         data = self._load_keys()
         service_keys = data.get(service, {})
         value = service_keys.get(key_name)
@@ -643,7 +647,7 @@ class EncryptedFileBackend(KeyBackend):
     # Master key management
     # ------------------------------------------------------------------
 
-    def backup_master_key(self, backup_path: Optional[Path] = None) -> Path:
+    def backup_master_key(self, backup_path: Path | None = None) -> Path:
         """Create a backup of the master encryption key.
 
         Args:
@@ -733,18 +737,27 @@ class KeyManager:
         km.delete_key("openai", "api_key")
     """
 
+    DEFAULT_CACHE_TTL = 60  # seconds
+
     def __init__(
         self,
-        keyring_backend: Optional[KeyBackend] = None,
-        file_backend: Optional[FileBackend] = None,
+        keyring_backend: KeyBackend | None = None,
+        file_backend: FileBackend | None = None,
+        cache_ttl: float = DEFAULT_CACHE_TTL,
     ) -> None:
         self._keyring = keyring_backend or KeyringBackend()
         self._file = file_backend or FileBackend()
+        self._cache: dict[str, tuple[str, float]] = {}
+        self._cache_ttl = cache_ttl
 
-    def get_key(self, service: str, key_name: str = "api_key") -> Optional[str]:
+    @staticmethod
+    def _cache_key(service: str, key_name: str) -> str:
+        return f"{service}:{key_name}"
+
+    def get_key(self, service: str, key_name: str = "api_key") -> str | None:
         """Retrieve an API key.
 
-        Checks in order: keyring, file backend, environment variables.
+        Checks in order: in-memory cache, keyring, file backend, environment variables.
 
         Args:
             service: Service identifier (e.g., "openai", "mathpix").
@@ -753,21 +766,30 @@ class KeyManager:
         Returns:
             The key value, or None if not found.
         """
-        # Try keyring first
+        cache_key = self._cache_key(service, key_name)
+
+        if cache_key in self._cache:
+            value, expiry = self._cache[cache_key]
+            if time.monotonic() < expiry:
+                logger.debug("Cache hit for %s/%s", service, key_name)
+                return value
+            del self._cache[cache_key]
+
         value = self._keyring.get_key(service, key_name)
         if value:
+            self._cache[cache_key] = (value, time.monotonic() + self._cache_ttl)
             return value
 
-        # Try file backend
         value = self._file.get_key(service, key_name)
         if value:
+            self._cache[cache_key] = (value, time.monotonic() + self._cache_ttl)
             return value
 
-        # Try environment variable
         env_var = f"{service.upper()}_{key_name.upper()}"
         value = os.environ.get(env_var)
         if value:
             logger.debug("Using key from environment variable %s", env_var)
+            self._cache[cache_key] = (value, time.monotonic() + self._cache_ttl)
             return value
 
         return None
@@ -776,12 +798,15 @@ class KeyManager:
         """Store an API key.
 
         Uses keyring when available; falls back to file backend only on failure.
+        Invalidates the cache entry for this key.
 
         Args:
             service: Service identifier.
             key_name: Key name.
             key_value: The API key to store.
         """
+        self._cache.pop(self._cache_key(service, key_name), None)
+
         try:
             self._keyring.set_key(service, key_name, key_value)
             logger.info("Stored key in keyring for %s/%s", service, key_name)
@@ -795,6 +820,7 @@ class KeyManager:
         """Delete a stored API key.
 
         Deletes from both keyring and file backend.
+        Invalidates the cache entry for this key.
 
         Args:
             service: Service identifier.
@@ -803,6 +829,8 @@ class KeyManager:
         Returns:
             True if the key was found and deleted from at least one backend.
         """
+        self._cache.pop(self._cache_key(service, key_name), None)
+
         deleted_keyring = False
         deleted_file = False
 
