@@ -15,6 +15,7 @@ from sidecar.ocr_engines.interface import (
     ValidationResult,
 )
 from sidecar.ocr_engines.key_manager import KeyManager, key_manager
+from sidecar.ocr_engines.manager import EngineManager
 from sidecar.ocr_engines.mathpix_engine import MathpixEngine
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "CostEstimate",
     "CostTracker",
     "cost_tracker",
+    "EngineManager",
     "KeyManager",
     "key_manager",
     "MathpixEngine",

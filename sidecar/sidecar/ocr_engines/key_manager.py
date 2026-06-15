@@ -715,11 +715,14 @@ class EncryptedFileBackend(KeyBackend):
 class KeyManager:
     """Cross-platform API key manager.
 
-    Attempts to use the best available backend:
+    Attempts to use the best available backend in priority order:
     1. Keyring (macOS Keychain / Windows Credential Manager / Linux Secret Service)
-    2. Encrypted file fallback
+    2. Encrypted file (Fernet encryption at rest) — preferred file backend
+    3. Environment variables (read-only source)
+    4. Plaintext file (last resort, backward compatibility)
 
-    Also checks environment variables as a read-only source.
+    Keys stored in plaintext FileBackend are lazily migrated to
+    EncryptedFileBackend on first read (when cryptography is available).
 
     Environment variable naming convention:
         {SERVICE}_{KEY_NAME} → e.g., OPENAI_API_KEY, MATHPIX_APP_ID
@@ -730,7 +733,7 @@ class KeyManager:
         # Store
         km.set_key("openai", "api_key", "sk-...")
 
-        # Retrieve (checks keyring first, then env vars)
+        # Retrieve (checks keyring first, then encrypted, then env vars)
         key = km.get_key("openai", "api_key")
 
         # Delete
@@ -743,10 +746,13 @@ class KeyManager:
         self,
         keyring_backend: KeyBackend | None = None,
         file_backend: FileBackend | None = None,
+        encrypted_backend: EncryptedFileBackend | None = None,
         cache_ttl: float = DEFAULT_CACHE_TTL,
     ) -> None:
         self._keyring = keyring_backend or KeyringBackend()
         self._file = file_backend or FileBackend()
+        self._encrypted = encrypted_backend
+
         self._cache: dict[str, tuple[str, float]] = {}
         self._cache_ttl = cache_ttl
 
@@ -757,7 +763,10 @@ class KeyManager:
     def get_key(self, service: str, key_name: str = "api_key") -> str | None:
         """Retrieve an API key.
 
-        Checks in order: in-memory cache, keyring, file backend, environment variables.
+        Priority: cache → keyring → encrypted file → env vars → plaintext file.
+
+        When a key is found in plaintext file but not encrypted, it is
+        lazily migrated to the encrypted backend.
 
         Args:
             service: Service identifier (e.g., "openai", "mathpix").
@@ -780,10 +789,11 @@ class KeyManager:
             self._cache[cache_key] = (value, time.monotonic() + self._cache_ttl)
             return value
 
-        value = self._file.get_key(service, key_name)
-        if value:
-            self._cache[cache_key] = (value, time.monotonic() + self._cache_ttl)
-            return value
+        if self._encrypted is not None:
+            value = self._encrypted.get_key(service, key_name)
+            if value:
+                self._cache[cache_key] = (value, time.monotonic() + self._cache_ttl)
+                return value
 
         env_var = f"{service.upper()}_{key_name.upper()}"
         value = os.environ.get(env_var)
@@ -792,12 +802,33 @@ class KeyManager:
             self._cache[cache_key] = (value, time.monotonic() + self._cache_ttl)
             return value
 
+        value = self._file.get_key(service, key_name)
+        if value:
+            self._cache[cache_key] = (value, time.monotonic() + self._cache_ttl)
+            self._migrate_to_encrypted(service, key_name, value)
+            return value
+
         return None
+
+    def _migrate_to_encrypted(self, service: str, key_name: str, value: str) -> None:
+        """Lazily migrate a plaintext key to encrypted storage."""
+        if self._encrypted is None:
+            return
+        try:
+            self._encrypted.set_key(service, key_name, value)
+            self._file.delete_key(service, key_name)
+            logger.info(
+                "Migrated key %s/%s from plaintext to encrypted storage",
+                service,
+                key_name,
+            )
+        except Exception as e:
+            logger.warning("Lazy migration failed for %s/%s: %s", service, key_name, e)
 
     def set_key(self, service: str, key_name: str, key_value: str) -> None:
         """Store an API key.
 
-        Uses keyring when available; falls back to file backend only on failure.
+        Priority: keyring → encrypted file → plaintext file.
         Invalidates the cache entry for this key.
 
         Args:
@@ -812,14 +843,22 @@ class KeyManager:
             logger.info("Stored key in keyring for %s/%s", service, key_name)
             return
         except Exception:
-            logger.warning("Keyring storage failed, using file backend only")
+            logger.warning("Keyring storage failed, trying encrypted file backend")
+
+        if self._encrypted is not None:
+            try:
+                self._encrypted.set_key(service, key_name, key_value)
+                logger.info("Stored key in encrypted file for %s/%s", service, key_name)
+                return
+            except Exception:
+                logger.warning("Encrypted file storage failed, falling back to plaintext")
 
         self._file.set_key(service, key_name, key_value)
 
     def delete_key(self, service: str, key_name: str = "api_key") -> bool:
         """Delete a stored API key.
 
-        Deletes from both keyring and file backend.
+        Deletes from keyring, encrypted file, and plaintext file.
         Invalidates the cache entry for this key.
 
         Args:
@@ -831,30 +870,53 @@ class KeyManager:
         """
         self._cache.pop(self._cache_key(service, key_name), None)
 
-        deleted_keyring = False
-        deleted_file = False
+        deleted = False
 
         try:
-            deleted_keyring = self._keyring.delete_key(service, key_name)
+            deleted = self._keyring.delete_key(service, key_name) or deleted
         except Exception:
             logger.warning("Keyring delete failed for service=%s key=%s", service, key_name)
 
+        if self._encrypted is not None:
+            try:
+                deleted = self._encrypted.delete_key(service, key_name) or deleted
+            except Exception:
+                logger.warning(
+                    "Encrypted file delete failed for service=%s key=%s",
+                    service,
+                    key_name,
+                )
+
         try:
-            deleted_file = self._file.delete_key(service, key_name)
+            deleted = self._file.delete_key(service, key_name) or deleted
         except Exception:
             logger.warning("File backend delete failed for service=%s key=%s", service, key_name)
 
-        return deleted_keyring or deleted_file
+        return deleted
 
     def list_services(self) -> list[str]:
-        """List services with stored keys in the file backend.
+        """List services with stored keys across all file backends.
 
         Returns:
             List of service identifiers.
         """
-        data = self._file._load_keys()
-        return list(data.keys())
+        services: set[str] = set()
+        services.update(self._file._load_keys().keys())
+        if self._encrypted is not None:
+            services.update(self._encrypted._load_keys().keys())
+        return sorted(services)
+
+
+def _create_default_encrypted_backend() -> EncryptedFileBackend | None:
+    """Create the default EncryptedFileBackend for the module-level singleton."""
+    if not CRYPTOGRAPHY_AVAILABLE:
+        return None
+    try:
+        return EncryptedFileBackend()
+    except Exception:
+        logger.warning("EncryptedFileBackend init failed, using plaintext file backend only")
+        return None
 
 
 # Module-level singleton
-key_manager = KeyManager()
+key_manager = KeyManager(encrypted_backend=_create_default_encrypted_backend())

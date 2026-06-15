@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from sidecar.cache import OcrCache, ocr_cache
 from sidecar.ocr_engines.cost_tracker import RateLimitExceededError, cost_tracker
 from sidecar.ocr_engines.interface import (
     ApiKeyError,
@@ -169,6 +170,18 @@ async def ocr_endpoint(request: OcrRequest):
     try:
         image_bytes = base64.b64decode(request.image_base64)
         validate_image(image_bytes)
+
+        cache_key = f"{OcrCache.hash_bytes(image_bytes)}:{request.backend}"
+        cached = ocr_cache.get(cache_key)
+        if cached is not None:
+            return OcrResponse(
+                latex=cached.latex,
+                confidence=cached.confidence,
+                backend=cached.backend,
+                timing_ms=cached.timing_ms,
+                cost_estimate=cached.cost_estimate.__dict__ if cached.cost_estimate else None,
+            )
+
         engine = get_engine(request.backend)
 
         # Pre-call rate limit check — prevents API calls when over limit
@@ -185,6 +198,8 @@ async def ocr_endpoint(request: OcrRequest):
             tokens_used=tokens,
             cost_usd=cost,
         )
+
+        ocr_cache.set(cache_key, result)
 
         return OcrResponse(
             latex=result.latex,

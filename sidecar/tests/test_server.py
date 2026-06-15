@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from sidecar.api.server import _engines, app, get_engine, register_engine
+from sidecar.cache import ocr_cache
 from sidecar.ocr_engines.cost_tracker import cost_tracker
 from sidecar.ocr_engines.interface import (
     ApiKeyError,
@@ -29,8 +30,10 @@ def reset_cost_tracker():
 @pytest.fixture(autouse=True)
 def clear_engines():
     _engines.clear()
+    ocr_cache.clear()
     yield
     _engines.clear()
+    ocr_cache.clear()
 
 
 def test_health_endpoint(client):

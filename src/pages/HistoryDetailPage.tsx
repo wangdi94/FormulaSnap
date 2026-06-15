@@ -6,6 +6,7 @@ import { copyToClipboard, type CopyFormat } from "../lib/clipboard";
 import { getBackendLabel } from "../lib/constants";
 import { t, getLocale } from "../lib/i18n";
 import FormulaPreview from "../components/FormulaPreview";
+import { Spinner } from "../components/Spinner";
 
 type CopyState = null | "copying" | "copied" | "error";
 
@@ -115,27 +116,7 @@ export default function HistoryDetailPage() {
     return (
       <div className="flex items-center justify-center h-full" role="status" aria-live="polite">
         <div className="flex items-center gap-3 text-gray-400 dark:text-gray-500">
-          <svg
-            className="animate-spin h-5 w-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-          >
-            <title>{t('common.loading')}</title>
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
+          <Spinner title={t('common.loading')} />
           <span>{t('common.loading')}</span>
         </div>
       </div>
@@ -283,27 +264,7 @@ export default function HistoryDetailPage() {
           >
             {deleting ? (
               <span className="flex items-center gap-2">
-                <svg
-                  className="animate-spin h-4 w-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <title>{t('history.deleting')}</title>
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                  />
-                </svg>
+                <Spinner size="sm" title={t('history.deleting')} />
                 {t('history.deleting')}
               </span>
             ) : (
@@ -346,27 +307,7 @@ function CopyButton({
     >
       {isCopying ? (
         <span className="flex items-center gap-2">
-          <svg
-            className="animate-spin h-4 w-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-          >
-            <title>{t('history.copying')}</title>
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
+          <Spinner size="sm" title={t('history.copying')} />
           {t('history.copying')}
         </span>
       ) : isCopied ? (

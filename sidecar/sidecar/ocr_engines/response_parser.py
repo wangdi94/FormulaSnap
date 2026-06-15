@@ -22,8 +22,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import List
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -51,6 +49,12 @@ _CODE_BLOCK_RE = re.compile(
 _LATEX_LINE_RE = re.compile(
     r"(?:\\[a-zA-Z]+|[${}\\^_&])"
 )
+
+# Collapse runs of 3+ newlines down to 2
+_NEWLINE_RUNS_RE = re.compile(r"\n{3,}")
+
+# Remove escaped braces/brackets/parens before bracket matching
+_ESCAPED_BRACKET_RE = re.compile(r"\\[{}()\[\]]")
 
 # Math mode delimiter pairs (open -> close)
 _MATH_DELIMITERS = [
@@ -167,8 +171,7 @@ def validate_latex(latex: str) -> ValidationResult:
 
 def _post_clean(text: str) -> str:
     """Collapse blank lines and strip surrounding whitespace."""
-    # Collapse runs of 3+ newlines down to 2
-    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = _NEWLINE_RUNS_RE.sub("\n\n", text)
     return text.strip()
 
 
@@ -237,7 +240,7 @@ def _check_bracket_matching(latex: str) -> ValidationResult | None:
     Respects LaTeX escape: \\{ and \\} are literal, not delimiters.
     """
     # Remove escaped braces/brackets/parens so they don't interfere
-    sanitized = re.sub(r"\\[{}()\[\]]", "", latex)
+    sanitized = _ESCAPED_BRACKET_RE.sub("", latex)
 
     stack: list[tuple[str, int]] = []
     pairs = {"{": "}", "[": "]", "(": ")"}

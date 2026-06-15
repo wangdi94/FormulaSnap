@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, startTransition } from 'react';
 import type { AppSettings } from '../types/settings';
 import { loadSettings, saveSettings, resetSettings } from '../lib/settings';
 import { getStats, saveApiKey, getApiKeys, type StatsResponse } from '../lib/sidecarClient';
 import { setLang, t } from '../lib/i18n';
 import { getBackendOptions } from '../lib/constants';
+import { Spinner } from '../components/Spinner';
 
 /* ─── API Key 字段定义 ─── */
 const API_KEY_FIELDS: {
@@ -120,7 +121,9 @@ export default function SettingsPage() {
 
   /* ── 独立加载统计 ── */
   useEffect(() => {
-    fetchStats();
+    startTransition(() => {
+      fetchStats();
+    });
     return () => abortRef.current?.abort();
   }, [fetchStats]);
 
@@ -219,11 +222,7 @@ export default function SettingsPage() {
     return (
       <div className="flex items-center justify-center h-full" role="status" aria-live="polite">
         <div className="flex items-center gap-3 text-gray-400 dark:text-gray-500">
-          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <title>{t('common.loading')}</title>
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
+          <Spinner title={t('common.loading')} />
           <span>{t('settings.loading')}</span>
         </div>
       </div>
@@ -510,11 +509,7 @@ export default function SettingsPage() {
             >
               {saving ? (
                 <span className="flex items-center gap-2">
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <title>{t('settings.saving')}</title>
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
+                  <Spinner size="sm" title={t('settings.saving')} />
                   {t('settings.saving')}
                 </span>
               ) : (

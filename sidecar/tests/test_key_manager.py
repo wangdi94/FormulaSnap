@@ -1,10 +1,13 @@
-"""Tests for key_manager.py — Fernet alias, restore_master_key, and cache.
+"""Tests for key_manager.py — Fernet alias, restore_master_key, cache,
+encrypted backend preference, and lazy migration.
 
 Covers:
 - _Fernet import alias availability
 - restore_master_key error handling (NameError regression)
 - generate_key() static method
 - KeyManager in-memory TTL cache (hit, expiry, invalidation)
+- EncryptedFileBackend preferred over FileBackend
+- Lazy migration from plaintext to encrypted storage
 """
 
 import time
@@ -14,6 +17,7 @@ import pytest
 
 from sidecar.ocr_engines.key_manager import (
     EncryptedFileBackend,
+    FileBackend,
     KeyBackend,
     KeyManager,
     _Fernet,
@@ -137,6 +141,7 @@ class TestKeyManagerCache:
         self.km = KeyManager(
             keyring_backend=self.backend,
             file_backend=self.file,
+            encrypted_backend=None,
             cache_ttl=60,
         )
 
@@ -164,6 +169,7 @@ class TestKeyManagerCache:
         km = KeyManager(
             keyring_backend=self.backend,
             file_backend=self.file,
+            encrypted_backend=None,
             cache_ttl=0.1,
         )
 
@@ -190,3 +196,157 @@ class TestKeyManagerCache:
         self.km.get_key("openai", "api_key")
 
         assert self.backend.get_key_calls == 2
+
+
+class TestEncryptedBackendPreference:
+    """EncryptedFileBackend should be preferred over FileBackend."""
+
+    def test_get_key_uses_encrypted_before_plaintext(self, tmp_path):
+        """When a key exists in both encrypted and plaintext, encrypted wins."""
+        master_key = _Fernet.generate_key()
+        encrypted = EncryptedFileBackend(config_dir=tmp_path, master_key=master_key)
+        encrypted.set_key("openai", "api_key", "encrypted-value")
+
+        plaintext = FileBackend(config_dir=tmp_path)
+        plaintext.set_key("openai", "api_key", "plaintext-value")
+
+        no_keyring = MagicMock()
+        no_keyring.get_key.return_value = None
+
+        km = KeyManager(
+            keyring_backend=no_keyring,
+            file_backend=plaintext,
+            encrypted_backend=encrypted,
+        )
+
+        assert km.get_key("openai", "api_key") == "encrypted-value"
+
+    def test_set_key_uses_encrypted_before_plaintext(self, tmp_path):
+        """set_key writes to encrypted backend, not plaintext."""
+        master_key = _Fernet.generate_key()
+        encrypted = EncryptedFileBackend(config_dir=tmp_path, master_key=master_key)
+
+        plaintext = FileBackend(config_dir=tmp_path / "plain")
+
+        no_keyring = MagicMock()
+        no_keyring.set_key.side_effect = RuntimeError("no keyring")
+
+        km = KeyManager(
+            keyring_backend=no_keyring,
+            file_backend=plaintext,
+            encrypted_backend=encrypted,
+        )
+
+        km.set_key("openai", "api_key", "new-secret")
+
+        assert encrypted.get_key("openai", "api_key") == "new-secret"
+        assert plaintext.get_key("openai", "api_key") is None
+
+    def test_explicit_encrypted_backend_is_used(self, tmp_path):
+        """Passing an explicit EncryptedFileBackend is used by KeyManager."""
+        master_key = _Fernet.generate_key()
+        encrypted = EncryptedFileBackend(config_dir=tmp_path, master_key=master_key)
+
+        no_keyring = MagicMock()
+        no_keyring.get_key.return_value = None
+        no_file = MagicMock()
+        no_file.get_key.return_value = None
+        no_file._load_keys.return_value = {}
+
+        km = KeyManager(
+            keyring_backend=no_keyring,
+            file_backend=no_file,
+            encrypted_backend=encrypted,
+        )
+
+        assert km._encrypted is encrypted
+
+    def test_no_encrypted_when_explicitly_none(self):
+        """Passing encrypted_backend=None disables encrypted storage."""
+        no_keyring = MagicMock()
+        no_keyring.get_key.return_value = None
+        no_file = MagicMock()
+        no_file.get_key.return_value = None
+        no_file._load_keys.return_value = {}
+
+        km = KeyManager(
+            keyring_backend=no_keyring,
+            file_backend=no_file,
+            encrypted_backend=None,
+        )
+
+        assert km._encrypted is None
+
+
+class TestLazyMigration:
+    """Keys found in plaintext FileBackend should be migrated to encrypted."""
+
+    def test_plaintext_key_migrated_on_read(self, tmp_path):
+        """get_key migrates a plaintext key to encrypted backend."""
+        plain_dir = tmp_path / "plain"
+        enc_dir = tmp_path / "enc"
+
+        plaintext = FileBackend(config_dir=plain_dir)
+        plaintext.set_key("openai", "api_key", "sk-abc123")
+
+        master_key = _Fernet.generate_key()
+        encrypted = EncryptedFileBackend(config_dir=enc_dir, master_key=master_key)
+
+        no_keyring = MagicMock()
+        no_keyring.get_key.return_value = None
+
+        km = KeyManager(
+            keyring_backend=no_keyring,
+            file_backend=plaintext,
+            encrypted_backend=encrypted,
+        )
+
+        result = km.get_key("openai", "api_key")
+
+        assert result == "sk-abc123"
+        assert encrypted.get_key("openai", "api_key") == "sk-abc123"
+        assert plaintext.get_key("openai", "api_key") is None
+
+    def test_no_migration_when_key_only_in_encrypted(self, tmp_path):
+        """No migration needed when key already lives in encrypted backend."""
+        master_key = _Fernet.generate_key()
+        encrypted = EncryptedFileBackend(config_dir=tmp_path, master_key=master_key)
+        encrypted.set_key("openai", "api_key", "already-encrypted")
+
+        plaintext = FileBackend(config_dir=tmp_path / "plain")
+
+        no_keyring = MagicMock()
+        no_keyring.get_key.return_value = None
+
+        km = KeyManager(
+            keyring_backend=no_keyring,
+            file_backend=plaintext,
+            encrypted_backend=encrypted,
+        )
+
+        assert km.get_key("openai", "api_key") == "already-encrypted"
+        assert plaintext.get_key("openai", "api_key") is None
+
+    def test_list_services_merges_both_backends(self, tmp_path):
+        """list_services returns services from both encrypted and plaintext."""
+        plain_dir = tmp_path / "plain"
+        enc_dir = tmp_path / "enc"
+
+        plaintext = FileBackend(config_dir=plain_dir)
+        plaintext.set_key("mathpix", "app_id", "mpx-id")
+
+        master_key = _Fernet.generate_key()
+        encrypted = EncryptedFileBackend(config_dir=enc_dir, master_key=master_key)
+        encrypted.set_key("openai", "api_key", "sk-enc")
+
+        no_keyring = MagicMock()
+
+        km = KeyManager(
+            keyring_backend=no_keyring,
+            file_backend=plaintext,
+            encrypted_backend=encrypted,
+        )
+
+        services = km.list_services()
+        assert "openai" in services
+        assert "mathpix" in services

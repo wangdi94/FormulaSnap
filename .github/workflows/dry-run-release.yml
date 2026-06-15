@@ -11,6 +11,10 @@ on:
       - '.github/workflows/dry-run-release.yml'
   workflow_dispatch:
 
+concurrency:
+  group: dry-run-release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     strategy:

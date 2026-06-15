@@ -16,8 +16,10 @@ from sidecar.ocr_engines.cost_tracker import (
     StatsSnapshot,
 )
 from sidecar.ocr_engines.key_manager import (
+    EncryptedFileBackend,
     FileBackend,
     KeyManager,
+    _Fernet,
     _mask_key,
 )
 
@@ -336,14 +338,28 @@ class TestKeyManager:
             assert result == "sk-env-key"
 
     def test_key_manager_prefers_stored_over_env(self, tmp_path):
-        file_backend = FileBackend(config_dir=tmp_path)
+        """Encrypted backend is preferred over env vars; plaintext is last resort."""
+        master_key = _Fernet.generate_key()
+        enc_dir = tmp_path / "enc"
+        encrypted = EncryptedFileBackend(config_dir=enc_dir, master_key=master_key)
+        encrypted.set_key("openai", "api_key", "sk-encrypted")
+
+        plain_dir = tmp_path / "plain"
+        file_backend = FileBackend(config_dir=plain_dir)
         file_backend.set_key("openai", "api_key", "sk-stored")
 
-        km = KeyManager(file_backend=file_backend)
+        mock_keyring = MagicMock()
+        mock_keyring.get_key.return_value = None
+
+        km = KeyManager(
+            keyring_backend=mock_keyring,
+            file_backend=file_backend,
+            encrypted_backend=encrypted,
+        )
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "sk-env-key"}):
             result = km.get_key("openai", "api_key")
-            assert result == "sk-stored"
+            assert result == "sk-encrypted"
 
     def test_key_manager_set_key_stores_in_file(self, tmp_path):
         file_backend = FileBackend(config_dir=tmp_path)
