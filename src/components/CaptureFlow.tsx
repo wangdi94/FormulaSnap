@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { callOcr, type OcrResponse, type OcrBackend, SidecarError, checkSidecarHealth } from "../lib/sidecarClient";
-import { loadSettings } from "../lib/settings";
+import { callOcr, type OcrResponse, SidecarError, checkSidecarHealth } from "../lib/sidecarClient";
+import { useSettings } from "../contexts/SettingsContext";
 import { t } from "../lib/i18n";
 import { Spinner } from "./Spinner";
 import CapturePreview from "./capture/CapturePreview";
@@ -53,27 +53,21 @@ export function mapSidecarError(err: unknown): FlowError {
 }
 
 export default function CaptureFlow() {
+  const { settings } = useSettings();
+  const backend = settings.default_backend;
+  const hotkey = settings.hotkey;
   const [state, setState] = useState<FlowState>("idle");
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [result, setResult] = useState<OcrResponse | null>(null);
   const [error, setError] = useState<FlowError | null>(null);
-  const [backend, setBackend] = useState<OcrBackend | 'auto'>("pix2text");
-  const [hotkey, setHotkey] = useState<string>("Ctrl+Shift+C");
   const [sidecarErrorDetail, setSidecarErrorDetail] = useState<string | null>(null);
   const ocrAbortRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    loadSettings()
-      .then((s) => {
-        setBackend(s.default_backend);
-        setHotkey(s.hotkey);
-      })
-      .catch((e) => console.warn("Failed to load backend setting:", e));
-  }, []);
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; });
 
   useEffect(() => {
     const unlistenReady = listen("sidecar://ready", () => {
-      if (state === "sidecar-offline") {
+      if (stateRef.current === "sidecar-offline") {
         setState("idle");
         setSidecarErrorDetail(null);
       }
@@ -88,7 +82,7 @@ export default function CaptureFlow() {
       void unlistenReady.then((fn) => fn());
       void unlistenError.then((fn) => fn());
     };
-  }, [state]);
+  }, []);
 
   useEffect(() => {
     const check = async () => {

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import CaptureFlow from '../components/CaptureFlow';
+import { SettingsProvider } from '../contexts/SettingsContext';
 
 // Mock Tauri core invoke
 vi.mock('@tauri-apps/api/core', () => ({
@@ -22,6 +23,7 @@ vi.mock('../lib/settings', () => ({
     monthly_budget_usd: 10,
     language: 'zh',
   }),
+  saveSettings: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../lib/i18n', () => ({
@@ -44,29 +46,33 @@ vi.mock('../lib/sidecarClient', () => ({
   },
 }));
 
+function renderWithSettings(ui: React.ReactElement) {
+  return render(<SettingsProvider>{ui}</SettingsProvider>);
+}
+
 describe('CaptureFlow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('初始状态为 idle，显示快捷键提示', () => {
-    render(<CaptureFlow />);
+    renderWithSettings(<CaptureFlow />);
     expect(screen.getByText('capture.hotkey_hint')).toBeInTheDocument();
   });
 
   it('显示"选择区域截图"按钮', () => {
-    render(<CaptureFlow />);
+    renderWithSettings(<CaptureFlow />);
     expect(screen.getByText('capture.select_region')).toBeInTheDocument();
   });
 
   it('通过 Tauri invoke 加载设置并设置默认 backend', async () => {
-    render(<CaptureFlow />);
+    renderWithSettings(<CaptureFlow />);
     const { loadSettings } = await import('../lib/settings');
     expect(loadSettings).toHaveBeenCalled();
   });
 
   it('注册 Tauri event listeners', async () => {
-    render(<CaptureFlow />);
+    renderWithSettings(<CaptureFlow />);
     const { listen } = await import('@tauri-apps/api/event');
     expect(listen).toHaveBeenCalledTimes(5);
     expect(listen).toHaveBeenCalledWith('open-selection', expect.any(Function));

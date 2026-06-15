@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import type { HistoryEntry } from "../types/history";
 import { getBackendLabel } from "../lib/constants";
+import { getConfidenceColor } from "../lib/confidence";
 import { t, getLocale } from "../lib/i18n";
 import { Spinner } from "../components/Spinner";
 
@@ -46,13 +47,6 @@ function formatTime(iso: string): string {
   } catch {
     return iso;
   }
-}
-
-/** 置信度颜色 */
-function confidenceColor(c: number): string {
-  if (c >= 0.8) return "text-green-600 dark:text-green-400";
-  if (c >= 0.5) return "text-yellow-600 dark:text-yellow-400";
-  return "text-red-600 dark:text-red-400";
 }
 
 export default function HistoryPage() {
@@ -275,7 +269,7 @@ const HistoryListItem = memo(function HistoryListItem({
           {getBackendLabel(entry.backend)}
         </span>
 
-        <span className={`font-mono ${confidenceColor(entry.confidence)}`}>
+        <span className={`font-mono ${getConfidenceColor(entry.confidence)}`}>
           {(entry.confidence * 100).toFixed(0)}%
         </span>
 

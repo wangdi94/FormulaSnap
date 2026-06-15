@@ -5,6 +5,7 @@ import Header from "./components/Header";
 import StatusBar from "./components/StatusBar";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/Toast";
+import { SettingsProvider } from "./contexts/SettingsContext";
 import { Spinner } from "./components/Spinner";
 import { applyTheme, getTheme } from "./lib/theme";
 import { initSidecarPort } from "./lib/sidecarClient";
@@ -91,9 +92,11 @@ function App() {
 function AppWithRouter() {
   return (
     <BrowserRouter>
-      <ToastProvider>
-        <App />
-      </ToastProvider>
+      <SettingsProvider>
+        <ToastProvider>
+          <App />
+        </ToastProvider>
+      </SettingsProvider>
     </BrowserRouter>
   );
 }

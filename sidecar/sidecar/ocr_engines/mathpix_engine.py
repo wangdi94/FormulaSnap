@@ -12,6 +12,7 @@ import time
 
 import httpx
 
+from sidecar.ocr_engines.image_utils import detect_mime_type
 from sidecar.ocr_engines.interface import (
     ApiKeyError,
     CostEstimate,
@@ -75,7 +76,7 @@ class MathpixEngine:
         }
 
         payload = {
-            "src": "data:image/png;base64," + base64.b64encode(image).decode(),
+            "src": f"data:{detect_mime_type(image)};base64,{base64.b64encode(image).decode()}",
             "formats": ["latex_simplified"],
             "data_options": {
                 "include_asciimath": False,

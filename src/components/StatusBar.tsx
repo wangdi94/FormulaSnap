@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useRef, memo } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { loadSettings } from "../lib/settings";
 import { t } from "../lib/i18n";
 import { getBackendLabel } from "../lib/constants";
 import { checkSidecarHealth } from "../lib/sidecarClient";
+import { useSettings } from "../contexts/SettingsContext";
 
 type SidecarStatus = "connecting" | "ready" | "error";
 
@@ -11,23 +11,14 @@ const INITIAL_INTERVAL = 2000;
 const MAX_INTERVAL = 30000;
 
 export default memo(function StatusBar() {
-  const [backendLabel, setBackendLabel] = useState(getBackendLabel("pix2text"));
+  const { settings } = useSettings();
+  const backendLabel = useMemo(() => getBackendLabel(settings.default_backend), [settings.default_backend]);
   const [sidecarStatus, setSidecarStatus] = useState<SidecarStatus>("connecting");
   const [sidecarError, setSidecarError] = useState<string | null>(null);
 
   const intervalRef = useRef(INITIAL_INTERVAL);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
-
-  useEffect(() => {
-    loadSettings()
-      .then((s) => {
-        setBackendLabel(getBackendLabel(s.default_backend));
-      })
-      .catch(() => {
-        /* 保持默认值 */
-      });
-  }, []);
 
   // 监听 sidecar 事件
   useEffect(() => {

@@ -4,6 +4,7 @@ import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import type { HistoryEntry } from "../types/history";
 import { copyToClipboard, type CopyFormat } from "../lib/clipboard";
 import { getBackendLabel } from "../lib/constants";
+import { getConfidenceColor } from "../lib/confidence";
 import { t, getLocale } from "../lib/i18n";
 import FormulaPreview from "../components/FormulaPreview";
 import { Spinner } from "../components/Spinner";
@@ -114,12 +115,9 @@ export default function HistoryDetailPage() {
   );
 
   /* ── 置信度颜色 ── */
-  const confidenceColorClass = useMemo(() => {
-    if (!entry) return "";
-    if (entry.confidence >= 0.8) return "text-green-600 dark:text-green-400";
-    if (entry.confidence >= 0.5) return "text-yellow-600 dark:text-yellow-400";
-    return "text-red-600 dark:text-red-400";
-  }, [entry]);
+  const confidenceColorClass = entry
+    ? getConfidenceColor(entry.confidence)
+    : "";
 
   /* ── 格式化时间 ── */
   const formattedTime = useMemo(
