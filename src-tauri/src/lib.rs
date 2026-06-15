@@ -11,6 +11,8 @@ use std::sync::Mutex;
 use tauri::Manager;
 use tauri::WindowEvent;
 
+use base64::Engine;
+
 /// 数据库连接包装器。
 ///
 /// 使用 `std::sync::Mutex` 而非 `parking_lot::Mutex`，原因：
@@ -24,7 +26,6 @@ pub struct DbConn(pub Mutex<rusqlite::Connection>);
 #[tauri::command]
 fn capture_screen_base64() -> Result<String, String> {
     let png_bytes = screenshot::capture_screen()?;
-    use base64::Engine;
     Ok(base64::engine::general_purpose::STANDARD.encode(&png_bytes))
 }
 
@@ -32,16 +33,13 @@ fn capture_screen_base64() -> Result<String, String> {
 #[tauri::command]
 fn capture_region_base64(x: u32, y: u32, width: u32, height: u32) -> Result<String, String> {
     let png_bytes = screenshot::capture_region(x, y, width, height)?;
-    use base64::Engine;
     Ok(base64::engine::general_purpose::STANDARD.encode(&png_bytes))
 }
 
 /// 截取全屏并返回 base64（供区域选择使用）。
 #[tauri::command]
 fn capture_screen_for_selection() -> Result<String, String> {
-    let png_bytes = screenshot::capture_screen()?;
-    use base64::Engine;
-    Ok(base64::engine::general_purpose::STANDARD.encode(&png_bytes))
+    capture_screen_base64()
 }
 
 /// 打开透明全屏区域选择窗口。

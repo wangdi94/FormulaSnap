@@ -4,7 +4,7 @@ use rusqlite::{Connection, Result};
 /// This function is idempotent - safe to call multiple times.
 pub fn initialize_database(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA journal_mode=WAL;")?;
-    conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+    conn.execute_batch("PRAGMA wal_checkpoint(PASSIVE);")?;
 
     // Create history table
     conn.execute_batch(
@@ -50,6 +50,11 @@ pub fn initialize_database(conn: &Connection) -> Result<()> {
             INSERT INTO history_fts(history_fts, rowid, latex) VALUES('delete', old.id, old.latex);
             INSERT INTO history_fts(rowid, latex) VALUES (new.id, new.latex);
         END;",
+    )?;
+
+    // Create index for history list query (ORDER BY created_at DESC)
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_history_created_at ON history(created_at DESC);",
     )?;
 
     Ok(())
@@ -116,5 +121,35 @@ mod tests {
         initialize_database(&conn).unwrap();
         initialize_database(&conn).unwrap();
         // Should not fail
+    }
+
+    #[test]
+    fn test_index_created_at_used() {
+        let conn = Connection::open_in_memory().unwrap();
+        initialize_database(&conn).unwrap();
+
+        // Insert a few rows so the optimizer has data to consider
+        for i in 0..5 {
+            conn.execute(
+                "INSERT INTO history (latex, backend, confidence) VALUES (?1, ?2, ?3)",
+                [format!("x_{{{i}}}"), "test".into(), "0.9".into()],
+            )
+            .unwrap();
+        }
+
+        let plan: String = conn
+            .query_row(
+                "EXPLAIN QUERY PLAN \
+                 SELECT id, created_at, latex, backend, confidence, screenshot_path, mathml \
+                 FROM history ORDER BY created_at DESC",
+                [],
+                |row| row.get(3), // detail column (index 3)
+            )
+            .unwrap();
+
+        assert!(
+            plan.contains("idx_history_created_at") || plan.contains("USING INDEX"),
+            "Expected query plan to use idx_history_created_at index, got: {plan}"
+        );
     }
 }

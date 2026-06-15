@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::io::Write;
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -118,7 +119,7 @@ pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
     // 健康检查线程据此提前终止，避免等待完整超时
     let process_exit_code = Arc::new(AtomicI32::new(i32::MAX));
     // 捕获 sidecar 最后的 stderr 输出，用于诊断
-    let stderr_lines: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let stderr_lines: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::new()));
 
     let pec_events = process_exit_code.clone();
     let stderr_events = stderr_lines.clone();
@@ -137,9 +138,9 @@ pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
                         log::warn!("[sidecar] {}", line);
                         // 保留最后 20 行用于诊断
                         let mut buf = stderr_events.lock().unwrap();
-                        buf.push(line);
+                        buf.push_back(line);
                         if buf.len() > 20 {
-                            buf.remove(0);
+                            buf.pop_front();
                         }
                     }
                 }

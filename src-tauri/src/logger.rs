@@ -39,8 +39,6 @@ impl Log for FileLogger {
         if let Ok(mut file) = self.file.lock() {
             if file.write_all(message.as_bytes()).is_err() {
                 eprint!("{}", message);
-            } else if let Err(e) = file.flush() {
-                eprintln!("日志刷新失败: {}", e);
             }
         } else {
             log::warn!("日志文件 mutex 中毒，降级到 stderr 输出");
@@ -313,6 +311,53 @@ mod tests {
             "mutex 中毒时应输出 diagnostic warning，实际日志: {:?}",
             logs
         );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 验证 BufWriter 正确缓冲日志——多次写入不立即刷盘，显式 flush 后才写入。
+    #[test]
+    fn test_buffered_logging() {
+        let dir = std::env::temp_dir().join("formulasnap_test_buffered_logging");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let log_path = dir.join("test.log");
+
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .unwrap();
+
+        let logger = FileLogger {
+            file: Mutex::new(BufWriter::new(file)),
+        };
+
+        for i in 0..10 {
+            let record = log::RecordBuilder::new()
+                .level(Level::Info)
+                .target("test")
+                .module_path(Some("logger::tests"))
+                .args(format_args!("buffered message {}", i))
+                .build();
+            logger.log(&record);
+        }
+
+        let size_before_flush = std::fs::metadata(&log_path).unwrap().len();
+        assert_eq!(
+            size_before_flush, 0,
+            "BufWriter 应缓冲日志，flush 前文件大小应为 0"
+        );
+
+        logger.flush();
+        let size_after_flush = std::fs::metadata(&log_path).unwrap().len();
+        assert!(
+            size_after_flush > 0,
+            "flush 后文件大小应 > 0，实际: {}",
+            size_after_flush
+        );
+
+        drop(logger);
 
         let _ = std::fs::remove_dir_all(&dir);
     }
