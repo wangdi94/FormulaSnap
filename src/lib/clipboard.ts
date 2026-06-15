@@ -74,6 +74,7 @@ export async function copyToClipboard(text: string, format: CopyFormat): Promise
           return;
         }
       } catch {
+        // PNG 转换失败时 fallback 到纯文本复制
       } finally {
         if (objectUrl) {
           URL.revokeObjectURL(objectUrl);

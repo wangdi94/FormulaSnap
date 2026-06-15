@@ -180,7 +180,8 @@ pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
                 let code = pec_health.load(Ordering::SeqCst);
                 let error_msg = if code != i32::MAX {
                     let stderr = stderr_health.lock().unwrap();
-                    let stderr_text = stderr.join(" | ");
+                    let stderr_text: Vec<String> = stderr.iter().cloned().collect();
+                    let stderr_text = stderr_text.join(" | ");
                     if stderr_text.is_empty() {
                         format!(
                             "Sidecar 进程意外退出（退出码: {code}），请查看应用日志获取详细信息"

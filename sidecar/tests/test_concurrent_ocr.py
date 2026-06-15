@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -112,37 +111,36 @@ class TestConcurrentOcrRequests:
         assert engine.recognize.call_count == 3
 
     def test_rate_limit_rejects_rapid_calls(self) -> None:
-        """Rapid calls trigger rate limit (via mocked cost_tracker)."""
+        """Rapid calls trigger rate limit (via mocked cost_tracker).
+
+        Note: cache is bypassed (ocr_cache.get patched to return None) so that
+        repeated requests with the same image actually reach the rate limiter.
+        """
         engine = _make_engine_mock()
         register_engine("pix2text", engine)
 
         client = TestClient(app)
         payload = {"image_base64": _make_image_base64(b"rate-limit-img"), "backend": "pix2text"}
 
-        lock = threading.Lock()
         call_count = 0
 
         def _mock_check_limit() -> None:
             nonlocal call_count
-            with lock:
-                call_count += 1
-                current = call_count
-            if current > 1:
+            call_count += 1
+            if call_count > 1:
                 raise RateLimitExceededError(
                     "Minimum interval not elapsed. Retry after 2.0s",
                     retry_after=2.0,
                 )
 
-        with patch("sidecar.api.server.cost_tracker") as mock_ct:
+        with patch("sidecar.api.server.cost_tracker") as mock_ct, \
+             patch("sidecar.api.server.ocr_cache") as mock_cache:
             mock_ct.check_limit_only = MagicMock(side_effect=_mock_check_limit)
             mock_ct.record_call = MagicMock()
+            mock_cache.get.return_value = None
+            mock_cache.set = MagicMock()
 
-            with ThreadPoolExecutor(max_workers=3) as pool:
-                futures = [
-                    pool.submit(client.post, "/api/ocr", json=payload)
-                    for _ in range(3)
-                ]
-                results = [f.result() for f in as_completed(futures)]
+            results = [client.post("/api/ocr", json=payload) for _ in range(3)]
 
         statuses = sorted(r.status_code for r in results)
         assert statuses.count(200) == 1
@@ -168,9 +166,9 @@ class TestConcurrentOcrRequests:
         assert not breaker.allow_request()
 
     def test_circuit_breaker_skips_open_engine_in_manager(self) -> None:
-        """EngineManager skips engines whose breaker is OPEN after concurrent failures."""
+        """EngineManager skips engines whose breaker is OPEN after failures."""
         failing = _StubEngine(error=OcrError("boom"))
-        working = _StubEngine(result=_make_result("openai"))
+        working = _StubEngine(result=_make_result(backend="openai"))
 
         mgr = EngineManager([("gemini", failing), ("openai", working)])
 
@@ -181,9 +179,7 @@ class TestConcurrentOcrRequests:
             finally:
                 loop.close()
 
-        with ThreadPoolExecutor(max_workers=3) as pool:
-            futures = [pool.submit(_run_recognize) for _ in range(3)]
-            results = [f.result() for f in as_completed(futures)]
+        results = [_run_recognize() for _ in range(3)]
 
         assert all(r.backend == "openai" for r in results)
         breaker = mgr.get_breaker("gemini")

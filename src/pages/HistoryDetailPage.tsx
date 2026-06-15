@@ -29,9 +29,10 @@ export default function HistoryDetailPage() {
   const copyTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
+    const timeouts = copyTimeoutsRef.current;
     return () => {
       mountedRef.current = false;
-      for (const t of Object.values(copyTimeoutsRef.current)) {
+      for (const t of Object.values(timeouts)) {
         clearTimeout(t);
       }
     };

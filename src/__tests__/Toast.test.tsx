@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { ToastProvider, ToastContext } from '../components/Toast';
-import { useContext } from 'react';
+import { useContext, useEffect } from 'react';
 import type { ReactNode } from 'react';
 
 vi.mock('../lib/i18n', () => ({
@@ -13,8 +13,10 @@ let triggerToast: ((type: 'success' | 'warning' | 'error', message: string) => v
 
 function ToastConsumer() {
   const ctx = useContext(ToastContext);
-  if (!ctx) return null;
-  triggerToast = ctx.toast;
+  useEffect(() => {
+    triggerToast = ctx?.toast ?? null;
+    return () => { triggerToast = null; };
+  }, [ctx?.toast]);
   return null;
 }
 
