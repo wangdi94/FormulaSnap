@@ -1,7 +1,9 @@
 """Tests for Gemini Vision OCR engine."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock, PropertyMock
+
 from sidecar.ocr_engines.interface import (
     ApiKeyError,
     CostEstimate,
@@ -9,7 +11,6 @@ from sidecar.ocr_engines.interface import (
     OcrOptions,
     OcrResult,
     RateLimitError,
-    ValidationResult,
 )
 
 
@@ -139,6 +140,53 @@ class TestGeminiEngine:
             mock_compress.return_value = b"compressed_png"
             await self.engine.recognize(over_limit_image, OcrOptions())
             mock_compress.assert_called_once_with(over_limit_image)
+
+    @patch("sidecar.ocr_engines.gemini_engine.genai")
+    async def test_compress_runs_in_executor(self, mock_genai):
+        """_compress_image is dispatched via run_in_executor, not blocking event loop."""
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.text = "\\int_0^1 x^2 dx"
+        mock_response.usage_metadata.prompt_token_count = 100
+        mock_response.usage_metadata.candidates_token_count = 50
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+        from sidecar.ocr_engines.gemini_engine import GEMINI_IMAGE_LIMIT
+        large_image = b"\x00" * (GEMINI_IMAGE_LIMIT + 1)
+
+        mock_loop = MagicMock()
+        mock_loop.run_in_executor = AsyncMock(return_value=b"compressed_png")
+
+        with patch("asyncio.get_running_loop", return_value=mock_loop):
+            result = await self.engine.recognize(large_image, OcrOptions())
+
+        import sidecar.ocr_engines.gemini_engine as mod
+        mock_loop.run_in_executor.assert_called_once_with(
+            None, mod._compress_image, large_image
+        )
+        assert "int" in result.latex
+
+    @patch("sidecar.ocr_engines.gemini_engine.genai")
+    async def test_small_image_no_executor(self, mock_genai):
+        """Small images do NOT call run_in_executor."""
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.text = "$x$"
+        mock_response.usage_metadata.prompt_token_count = 100
+        mock_response.usage_metadata.candidates_token_count = 50
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+        mock_loop = MagicMock()
+        mock_loop.run_in_executor = AsyncMock()
+
+        with patch("asyncio.get_running_loop", return_value=mock_loop):
+            await self.engine.recognize(b"small", OcrOptions())
+
+        mock_loop.run_in_executor.assert_not_called()
 
     # ------------------------------------------------------------------
     # Cost estimation
@@ -271,7 +319,9 @@ class TestGeminiEngine:
         mock_genai.Client.return_value = mock_client
 
         server_err = type("ServerError", (Exception,), {})
-        mock_client.aio.models.generate_content = AsyncMock(side_effect=server_err("internal error"))
+        mock_client.aio.models.generate_content = AsyncMock(
+            side_effect=server_err("internal error")
+        )
 
         import sidecar.ocr_engines.gemini_engine as mod
         original = mod._ServerError
@@ -365,8 +415,9 @@ class TestCompressImage:
     """Tests for _compress_image helper."""
 
     def test_raises_value_error_after_max_iterations(self):
-        from sidecar.ocr_engines.gemini_engine import _compress_image, GEMINI_IMAGE_LIMIT
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
+        from sidecar.ocr_engines.gemini_engine import GEMINI_IMAGE_LIMIT, _compress_image
 
         mock_img = MagicMock()
         mock_img.mode = "RGB"
@@ -383,10 +434,11 @@ class TestCompressImage:
                 _compress_image(b"fake_large_image")
 
     def test_returns_compressed_data_when_within_limit(self):
-        from sidecar.ocr_engines.gemini_engine import _compress_image, GEMINI_IMAGE_LIMIT
+        import io
 
         from PIL import Image
-        import io
+
+        from sidecar.ocr_engines.gemini_engine import GEMINI_IMAGE_LIMIT, _compress_image
 
         img = Image.new("RGB", (10, 10), color="red")
         buf = io.BytesIO()
@@ -399,10 +451,12 @@ class TestCompressImage:
 
     def test_compress_image_mime_type(self):
         """PNG input yields JPEG output after _compress_image."""
+        import io
+
+        from PIL import Image
+
         from sidecar.ocr_engines.gemini_engine import _compress_image
         from sidecar.ocr_engines.image_utils import detect_mime_type
-        from PIL import Image
-        import io
 
         img = Image.new("RGB", (10, 10), color="red")
         buf = io.BytesIO()
@@ -423,9 +477,11 @@ class TestCompressImage:
 
     def test_compress_image_just_over_limit(self):
         """A real image just over the limit compresses successfully."""
-        from sidecar.ocr_engines.gemini_engine import _compress_image, GEMINI_IMAGE_LIMIT
-        from PIL import Image
         import io
+
+        from PIL import Image
+
+        from sidecar.ocr_engines.gemini_engine import GEMINI_IMAGE_LIMIT, _compress_image
 
         # Create a large enough image to exceed the limit
         img = Image.new("RGB", (2000, 2000), color="red")

@@ -9,12 +9,11 @@ import asyncio
 import io
 import os
 import time
-from typing import Optional
 
 try:
     from google import genai
-    from google.genai import types
     from google.genai import errors as genai_errors
+    from google.genai import types
 
     GEMINI_AVAILABLE = True
     _ClientError = genai_errors.ClientError
@@ -27,17 +26,19 @@ except ImportError:
     _ClientError = Exception
     _ServerError = Exception
 
+from sidecar.ocr_engines.image_utils import detect_mime_type
 from sidecar.ocr_engines.interface import (
     ApiKeyError,
     CostEstimate,
     NetworkError,
     OcrOptions,
     OcrResult,
-    RateLimitError as OcrRateLimitError,
     RateLimitStatus,
     ValidationResult,
 )
-from sidecar.ocr_engines.image_utils import detect_mime_type
+from sidecar.ocr_engines.interface import (
+    RateLimitError as OcrRateLimitError,
+)
 from sidecar.ocr_engines.llm_base import LlmProvider
 
 # Gemini 2.5 Pro pricing (per million tokens)
@@ -103,7 +104,7 @@ def _compress_image(image: bytes) -> bytes:
 class GeminiEngine(LlmProvider):
     """Google Gemini 2.5 Pro Vision OCR backend."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         self._api_key = api_key or os.environ.get("GEMINI_API_KEY", "")
         self._client = None  # 延迟初始化
 
@@ -120,7 +121,8 @@ class GeminiEngine(LlmProvider):
         # Compress if image exceeds Gemini's 7 MB inline limit
         effective_image = image
         if len(image) > GEMINI_IMAGE_LIMIT:
-            effective_image = _compress_image(image)
+            loop = asyncio.get_running_loop()
+            effective_image = await loop.run_in_executor(None, _compress_image, image)
 
         mime_type = detect_mime_type(effective_image)
 
@@ -185,7 +187,7 @@ class GeminiEngine(LlmProvider):
             ),
         )
 
-    def estimate_cost(self, image: bytes) -> Optional[CostEstimate]:
+    def estimate_cost(self, image: bytes) -> CostEstimate | None:
         """Estimate cost based on Gemini 2.5 Pro rates."""
         tokens = self._estimate_tokens(image)
         cost_usd = tokens * GEMINI_INPUT_COST + 265 * GEMINI_OUTPUT_COST
@@ -200,7 +202,7 @@ class GeminiEngine(LlmProvider):
 
         return ValidationResult(valid=True, message="API key format valid")
 
-    def get_rate_limit_status(self) -> Optional[RateLimitStatus]:
+    def get_rate_limit_status(self) -> RateLimitStatus | None:
         """Gemini SDK does not expose rate limit info."""
         return None
 

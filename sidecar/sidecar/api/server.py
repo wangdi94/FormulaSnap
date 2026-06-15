@@ -1,20 +1,25 @@
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from typing import AsyncIterator, Optional
 import asyncio
 import base64
 import binascii
 import logging
 import os
 import threading
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+
+from sidecar.ocr_engines.cost_tracker import RateLimitExceededError, cost_tracker
 from sidecar.ocr_engines.interface import (
-    OcrBackend, OcrOptions, OcrError,
-    ApiKeyError, RateLimitError, NetworkError,
+    ApiKeyError,
+    NetworkError,
+    OcrBackend,
+    OcrError,
+    OcrOptions,
+    RateLimitError,
 )
-from sidecar.ocr_engines.cost_tracker import cost_tracker, RateLimitExceeded
 from sidecar.ocr_engines.key_manager import key_manager
 
 logger = logging.getLogger(__name__)
@@ -64,10 +69,10 @@ class OcrRequest(BaseModel):
 
 class OcrResponse(BaseModel):
     latex: str
-    confidence: Optional[float] = None
+    confidence: float | None = None
     backend: str
     timing_ms: int
-    cost_estimate: Optional[dict] = None
+    cost_estimate: dict | None = None
 
 
 class ValidateConfigRequest(BaseModel):
@@ -188,7 +193,7 @@ async def ocr_endpoint(request: OcrRequest):
             status_code=504,
             detail={"error": "TIMEOUT", "message": "OCR request timed out after 120s"},
         )
-    except RateLimitExceeded as e:
+    except RateLimitExceededError as e:
         raise HTTPException(
             status_code=429,
             detail={
@@ -217,7 +222,7 @@ async def ocr_endpoint(request: OcrRequest):
             status_code=500,
             detail={"error": "OCR_ERROR", "message": str(e)},
         )
-    except binascii.Error as e:
+    except binascii.Error:
         raise HTTPException(
             status_code=400,
             detail={"error": "INVALID_IMAGE", "message": "Invalid base64 image data"},

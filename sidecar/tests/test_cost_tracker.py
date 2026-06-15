@@ -6,22 +6,20 @@ Covers:
 - Key manager CRUD operations
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-import time
-from unittest.mock import patch, MagicMock
 
 from sidecar.ocr_engines.cost_tracker import (
     CostTracker,
-    RateLimitExceeded,
-    CallRecord,
+    RateLimitExceededError,
     StatsSnapshot,
 )
 from sidecar.ocr_engines.key_manager import (
-    KeyManager,
     FileBackend,
+    KeyManager,
     _mask_key,
 )
-
 
 # =========================================================================
 # CostTracker Tests
@@ -108,7 +106,7 @@ class TestRateLimiting:
         tracker.record_call("openai", tokens_used=100, cost_usd=0.001)
         current_time = 1001.0
 
-        with pytest.raises(RateLimitExceeded) as exc_info:
+        with pytest.raises(RateLimitExceededError) as exc_info:
             tracker.check_rate_limit()
 
         assert exc_info.value.retry_after is not None
@@ -131,14 +129,14 @@ class TestRateLimiting:
             tracker.record_call("openai", tokens_used=100, cost_usd=0.001)
             current_time += 0.01
 
-        with pytest.raises(RateLimitExceeded) as exc_info:
+        with pytest.raises(RateLimitExceededError) as exc_info:
             tracker.check_rate_limit()
 
         assert "Daily limit" in str(exc_info.value)
         assert exc_info.value.retry_after is not None
 
     def test_daily_limit_resets_next_day(self):
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timezone
 
         day1_start = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc).timestamp()
         current_time = day1_start
@@ -149,7 +147,7 @@ class TestRateLimiting:
         tracker.record_call("openai", tokens_used=100, cost_usd=0.001)
         current_time += 0.01
 
-        with pytest.raises(RateLimitExceeded):
+        with pytest.raises(RateLimitExceededError):
             tracker.check_rate_limit()
 
         day2_start = datetime(2024, 1, 2, 0, 0, 0, tzinfo=timezone.utc).timestamp()
@@ -175,7 +173,7 @@ class TestRateLimiting:
         tracker.record_call("openai", tokens_used=100, cost_usd=0.001)
         current_time = 1001.0
 
-        with pytest.raises(RateLimitExceeded) as exc_info:
+        with pytest.raises(RateLimitExceededError) as exc_info:
             tracker.check_rate_limit()
 
         assert exc_info.value.retry_after == pytest.approx(1.0)
@@ -188,7 +186,7 @@ class TestRateLimiting:
             tracker.record_call("openai", tokens_used=100, cost_usd=0.001)
             current_time += 0.01
 
-        with pytest.raises(RateLimitExceeded):
+        with pytest.raises(RateLimitExceededError):
             tracker.check_rate_limit()
 
         assert tracker.get_stats().remaining_today == 0
@@ -214,14 +212,14 @@ class TestCheckAndRecord:
         assert tracker.get_stats().total_calls == 1
 
     def test_check_and_record_fails_within_min_interval(self):
-        """check_and_record raises RateLimitExceeded within min interval."""
+        """check_and_record raises RateLimitExceededError within min interval."""
         current_time = 1000.0
         tracker = CostTracker(daily_limit=100, min_interval_secs=2.0, time_fn=lambda: current_time)
 
         tracker.record_call("openai", tokens_used=100, cost_usd=0.001)
         current_time = 1001.0
 
-        with pytest.raises(RateLimitExceeded) as exc_info:
+        with pytest.raises(RateLimitExceededError) as exc_info:
             tracker.check_and_record("openai", tokens_used=100, cost_usd=0.001)
 
         assert exc_info.value.retry_after is not None
@@ -229,7 +227,7 @@ class TestCheckAndRecord:
         assert tracker.get_stats().total_calls == 1
 
     def test_check_and_record_fails_at_daily_limit(self):
-        """check_and_record raises RateLimitExceeded at daily limit."""
+        """check_and_record raises RateLimitExceededError at daily limit."""
         current_time = 1000.0
         tracker = CostTracker(daily_limit=2, min_interval_secs=0.0, time_fn=lambda: current_time)
 
@@ -238,7 +236,7 @@ class TestCheckAndRecord:
         tracker.check_and_record("openai", tokens_used=100, cost_usd=0.001)
         current_time += 0.01
 
-        with pytest.raises(RateLimitExceeded) as exc_info:
+        with pytest.raises(RateLimitExceededError) as exc_info:
             tracker.check_and_record("openai", tokens_used=100, cost_usd=0.001)
 
         assert "Daily limit" in str(exc_info.value)
@@ -266,7 +264,7 @@ class TestCheckAndRecord:
             try:
                 tracker.check_and_record("openai", tokens_used=100, cost_usd=0.001)
                 results["success"] += 1
-            except RateLimitExceeded:
+            except RateLimitExceededError:
                 results["limited"] += 1
 
         threads = [threading.Thread(target=worker) for _ in range(10)]
@@ -418,3 +416,99 @@ class TestKeyManager:
 
         for i in range(n_threads):
             assert file_backend.get_key(f"service_{i}", "api_key") == f"key_{i}"
+
+
+# =========================================================================
+# Batch Write Tests
+# =========================================================================
+
+
+class TestBatchWrite:
+    """Tests for batched disk write optimization."""
+
+    def test_defer_write_below_count_threshold(self):
+        """_save_to_file is NOT called when pending count < 5."""
+        tracker = CostTracker(time_fn=lambda: 1000.0)
+        with patch.object(tracker, '_save_to_file') as mock_save:
+            tracker.record_call("openai", 100, 0.001)
+            tracker.record_call("openai", 100, 0.001)
+            tracker.record_call("openai", 100, 0.001)
+            assert mock_save.call_count == 0
+
+    def test_flush_at_count_threshold(self):
+        """_save_to_file is called once when 5 calls accumulated."""
+        current_time = 1000.0
+        tracker = CostTracker(time_fn=lambda: current_time)
+        with patch.object(tracker, '_save_to_file') as mock_save:
+            for i in range(5):
+                tracker.record_call("openai", 100, 0.001)
+                current_time += 3.0
+            assert mock_save.call_count == 1
+
+    def test_flush_at_time_threshold(self):
+        """_save_to_file is called when 30s elapsed since last write."""
+        current_time = 1000.0
+        tracker = CostTracker(time_fn=lambda: current_time)
+        with patch.object(tracker, '_save_to_file') as mock_save:
+            tracker.record_call("openai", 100, 0.001)
+            current_time = 1030.1
+            tracker.record_call("openai", 100, 0.001)
+            assert mock_save.call_count == 1
+
+    def test_flush_method_forces_write(self):
+        """flush() forces disk write regardless of thresholds."""
+        tracker = CostTracker(time_fn=lambda: 1000.0)
+        with patch.object(tracker, '_save_to_file') as mock_save:
+            tracker.record_call("openai", 100, 0.001)
+            assert mock_save.call_count == 0
+            tracker.flush()
+            assert mock_save.call_count == 1
+
+    def test_memory_accuracy_regardless_of_write_timing(self):
+        """Records accumulate correctly in memory without disk writes."""
+        current_time = 1000.0
+        tracker = CostTracker(time_fn=lambda: current_time)
+        with patch.object(tracker, '_save_to_file'):
+            for i in range(3):
+                tracker.record_call("openai", 100, 0.001)
+                current_time += 3.0
+            stats = tracker.get_stats()
+            assert stats.total_calls == 3
+            assert stats.total_tokens == 300
+            assert stats.estimated_cost_usd == pytest.approx(0.003)
+
+    def test_batch_write_via_check_and_record(self):
+        """Batch logic also applies to check_and_record()."""
+        current_time = 1000.0
+        tracker = CostTracker(daily_limit=100, min_interval_secs=0.0, time_fn=lambda: current_time)
+        with patch.object(tracker, '_save_to_file') as mock_save:
+            for i in range(4):
+                tracker.check_and_record("openai", 100, 0.001)
+                current_time += 0.01
+            assert mock_save.call_count == 0
+            tracker.check_and_record("openai", 100, 0.001)
+            assert mock_save.call_count == 1
+
+    def test_flush_noop_when_no_pending(self):
+        """flush() is a no-op when nothing pending."""
+        tracker = CostTracker(time_fn=lambda: 1000.0)
+        with patch.object(tracker, '_save_to_file') as mock_save:
+            tracker.flush()
+            assert mock_save.call_count == 0
+
+    def test_batch_resets_counter_after_flush(self):
+        """After flush, pending count resets so next batch starts fresh."""
+        current_time = 1000.0
+        tracker = CostTracker(time_fn=lambda: current_time)
+        with patch.object(tracker, '_save_to_file') as mock_save:
+            for i in range(5):
+                tracker.record_call("openai", 100, 0.001)
+                current_time += 3.0
+            assert mock_save.call_count == 1
+            # After flush at 5, need 5 more to trigger next flush
+            for i in range(4):
+                tracker.record_call("openai", 100, 0.001)
+                current_time += 3.0
+            assert mock_save.call_count == 1  # still only 1
+            tracker.record_call("openai", 100, 0.001)
+            assert mock_save.call_count == 2  # now 2

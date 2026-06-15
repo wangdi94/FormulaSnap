@@ -20,12 +20,12 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 import threading
-from dataclasses import dataclass, field
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class StatsSnapshot:
     remaining_today: int
 
 
-class RateLimitExceeded(Exception):
+class RateLimitExceededError(Exception):
     """Raised when a rate limit would be exceeded.
 
     Attributes:
@@ -76,7 +76,7 @@ class RateLimitExceeded(Exception):
         retry_after: Seconds to wait before the next call is allowed.
     """
 
-    def __init__(self, message: str, retry_after: Optional[float] = None):
+    def __init__(self, message: str, retry_after: float | None = None):
         super().__init__(message)
         self.retry_after = retry_after
 
@@ -97,7 +97,7 @@ class CostTracker:
 
         try:
             tracker.check_rate_limit()
-        except RateLimitExceeded as e:
+        except RateLimitExceededError as e:
             logger.debug("Rate limited, retry after %ss", e.retry_after)
             return
 
@@ -109,7 +109,7 @@ class CostTracker:
         self,
         daily_limit: int = 100,
         min_interval_secs: float = 2.0,
-        time_fn: Optional[Callable[[], float]] = None,
+        time_fn: Callable[[], float] | None = None,
     ) -> None:
         """Initialize the cost tracker.
 
@@ -127,11 +127,17 @@ class CostTracker:
         self._records: list[CallRecord] = []
         self._last_call_time: float = 0.0
 
+        # Batch write state: defer disk I/O until threshold is met.
+        self._BATCH_COUNT = 5
+        self._BATCH_INTERVAL = 30.0
+        self._pending_count: int = 0
+        self._last_write_time: float = self._time()
+
         # Persistence: load saved records from disk (if any).
         # Only enabled when using real time (time_fn is None) — test
         # callers that pass a custom time_fn skip file I/O.
         if time_fn is None:
-            self._data_file: Optional[Path] = (
+            self._data_file: Path | None = (
                 Path.home() / ".formulasnap" / "cost_stats.json"
             )
             self._load_from_file()
@@ -146,7 +152,7 @@ class CostTracker:
         """Check whether a new API call is allowed under rate limits.
 
         Raises:
-            RateLimitExceeded: If the daily limit is reached or the
+            RateLimitExceededError: If the daily limit is reached or the
                 minimum interval has not elapsed since the last call.
         """
         now = self._time()
@@ -161,7 +167,7 @@ class CostTracker:
                         "Rate limit: minimum interval not elapsed (%.1fs < %.1fs)",
                         elapsed, self._min_interval,
                     )
-                    raise RateLimitExceeded(
+                    raise RateLimitExceededError(
                         f"Minimum interval not elapsed. "
                         f"Retry after {retry_after:.1f}s",
                         retry_after=retry_after,
@@ -175,7 +181,7 @@ class CostTracker:
                     "Rate limit: daily limit of %d calls reached",
                     self._daily_limit,
                 )
-                raise RateLimitExceeded(
+                raise RateLimitExceededError(
                     f"Daily limit of {self._daily_limit} calls reached. "
                     f"Resets in {seconds_until_midnight:.0f}s",
                     retry_after=seconds_until_midnight,
@@ -188,7 +194,7 @@ class CostTracker:
         then call record_call() after a successful response.
 
         Raises:
-            RateLimitExceeded: If the daily limit is reached or the
+            RateLimitExceededError: If the daily limit is reached or the
                 minimum interval has not elapsed since the last call.
         """
         self.check_rate_limit()
@@ -225,7 +231,7 @@ class CostTracker:
         with self._lock:
             self._records.append(record)
             self._last_call_time = now
-            self._save_to_file()
+            self._maybe_save(now)
 
         logger.debug(
             "Recorded call: backend=%s tokens=%d cost=$%.6f",
@@ -255,7 +261,7 @@ class CostTracker:
             The created CallRecord.
 
         Raises:
-            RateLimitExceeded: If rate limits would be exceeded.
+            RateLimitExceededError: If rate limits would be exceeded.
         """
         now = self._time()
 
@@ -269,7 +275,7 @@ class CostTracker:
                         "Rate limit: minimum interval not elapsed (%.1fs < %.1fs)",
                         elapsed, self._min_interval,
                     )
-                    raise RateLimitExceeded(
+                    raise RateLimitExceededError(
                         f"Minimum interval not elapsed. "
                         f"Retry after {retry_after:.1f}s",
                         retry_after=retry_after,
@@ -283,7 +289,7 @@ class CostTracker:
                     "Rate limit: daily limit of %d calls reached",
                     self._daily_limit,
                 )
-                raise RateLimitExceeded(
+                raise RateLimitExceededError(
                     f"Daily limit of {self._daily_limit} calls reached. "
                     f"Resets in {seconds_until_midnight:.0f}s",
                     retry_after=seconds_until_midnight,
@@ -297,7 +303,7 @@ class CostTracker:
             )
             self._records.append(record)
             self._last_call_time = now
-            self._save_to_file()
+            self._maybe_save(now)
 
         logger.debug(
             "Recorded call: backend=%s tokens=%d cost=$%.6f",
@@ -425,6 +431,35 @@ class CostTracker:
         return (next_midnight - dt).total_seconds()
 
     # ------------------------------------------------------------------
+    # Batch Write
+    # ------------------------------------------------------------------
+
+    def _maybe_save(self, now: float) -> None:
+        """Conditionally persist records based on batch thresholds.
+
+        Writes to disk only when pending count >= _BATCH_COUNT OR
+        elapsed time since last write >= _BATCH_INTERVAL. Called
+        internally while the lock is held.
+        """
+        self._pending_count += 1
+        elapsed = now - self._last_write_time
+        if self._pending_count >= self._BATCH_COUNT or elapsed >= self._BATCH_INTERVAL:
+            self._save_to_file()
+            self._pending_count = 0
+            self._last_write_time = now
+
+    def flush(self) -> None:
+        """Force-write any pending records to disk.
+
+        Call this on application shutdown to avoid data loss.
+        """
+        with self._lock:
+            if self._pending_count > 0:
+                self._save_to_file()
+                self._pending_count = 0
+                self._last_write_time = self._time()
+
+    # ------------------------------------------------------------------
     # JSON Persistence
     # ------------------------------------------------------------------
 
@@ -441,7 +476,7 @@ class CostTracker:
             return
 
         try:
-            with open(data_file, "r") as f:
+            with open(data_file) as f:
                 data = json.load(f)
 
             if not isinstance(data, list):

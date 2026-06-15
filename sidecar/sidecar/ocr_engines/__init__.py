@@ -1,5 +1,6 @@
 """OCR engine implementations."""
 
+from sidecar.ocr_engines.cost_tracker import CostTracker, RateLimitExceededError, cost_tracker
 from sidecar.ocr_engines.interface import (
     ApiKeyError,
     CostEstimate,
@@ -13,9 +14,8 @@ from sidecar.ocr_engines.interface import (
     RateLimitStatus,
     ValidationResult,
 )
-from sidecar.ocr_engines.mathpix_engine import MathpixEngine
-from sidecar.ocr_engines.cost_tracker import CostTracker, RateLimitExceeded, cost_tracker
 from sidecar.ocr_engines.key_manager import KeyManager, key_manager
+from sidecar.ocr_engines.mathpix_engine import MathpixEngine
 
 __all__ = [
     "ApiKeyError",
@@ -32,7 +32,7 @@ __all__ = [
     "OcrResult",
     "ParseError",
     "RateLimitError",
-    "RateLimitExceeded",
+    "RateLimitExceededError",
     "RateLimitStatus",
     "ValidationResult",
 ]

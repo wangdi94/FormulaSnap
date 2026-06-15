@@ -10,7 +10,6 @@ import asyncio
 import io
 import threading
 import time
-from typing import Optional
 
 from sidecar.ocr_engines.interface import (
     CostEstimate,
@@ -74,7 +73,7 @@ class Pix2TextEngine:
             if self._initialized:  # double-check
                 return
             if Pix2Text is not None:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 self._p2t = await asyncio.wait_for(
                     loop.run_in_executor(None, Pix2Text.from_config),
                     timeout=60,
@@ -111,7 +110,7 @@ class Pix2TextEngine:
         start_time = time.time()
 
         # Run recognition in executor to avoid blocking the event loop
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         results = await asyncio.wait_for(
             loop.run_in_executor(None, self._run_recognition, image),
             timeout=90,
@@ -139,7 +138,7 @@ class Pix2TextEngine:
             timing_ms=timing_ms,
         )
 
-    def estimate_cost(self, image: bytes) -> Optional[CostEstimate]:
+    def estimate_cost(self, image: bytes) -> CostEstimate | None:
         """Local engine is free — always returns ``None``."""
         return None
 
@@ -174,6 +173,6 @@ class Pix2TextEngine:
         except Exception as exc:
             return ValidationResult(valid=False, message=str(exc))
 
-    def get_rate_limit_status(self) -> Optional[RateLimitStatus]:
+    def get_rate_limit_status(self) -> RateLimitStatus | None:
         """Local engine has no rate limits — always returns ``None``."""
         return None
