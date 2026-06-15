@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo } from "react";
+import { useState, useEffect, useMemo, useRef, memo } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { loadSettings } from "../lib/settings";
 import { t } from "../lib/i18n";
@@ -7,10 +7,17 @@ import { checkSidecarHealth } from "../lib/sidecarClient";
 
 type SidecarStatus = "connecting" | "ready" | "error";
 
+const INITIAL_INTERVAL = 2000;
+const MAX_INTERVAL = 30000;
+
 export default memo(function StatusBar() {
   const [backendLabel, setBackendLabel] = useState(getBackendLabel("pix2text"));
   const [sidecarStatus, setSidecarStatus] = useState<SidecarStatus>("connecting");
   const [sidecarError, setSidecarError] = useState<string | null>(null);
+
+  const intervalRef = useRef(INITIAL_INTERVAL);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     loadSettings()
@@ -40,28 +47,43 @@ export default memo(function StatusBar() {
     };
   }, []);
 
-  // 轮询健康检查（兜底，防止事件丢失）
+  // 轮询健康检查（指数退避，兜底防止事件丢失）
   useEffect(() => {
-    const check = async () => {
+    mountedRef.current = true;
+
+    const scheduleNext = (delay: number) => {
+      if (!mountedRef.current) return;
+      timeoutRef.current = setTimeout(poll, delay);
+    };
+
+    const poll = async () => {
+      if (!mountedRef.current) return;
+
       const ok = await checkSidecarHealth();
+      if (!mountedRef.current) return;
+
       if (ok) {
         setSidecarStatus("ready");
         setSidecarError(null);
+        intervalRef.current = INITIAL_INTERVAL;
+      } else {
+        intervalRef.current = Math.min(intervalRef.current * 2, MAX_INTERVAL);
       }
+
+      scheduleNext(intervalRef.current);
     };
 
     // 立即检查一次
-    void check();
+    void poll();
 
-    // 每 5 秒检查一次（仅在未就绪时）
-    const interval = setInterval(() => {
-      if (sidecarStatus !== "ready") {
-        void check();
+    return () => {
+      mountedRef.current = false;
+      if (timeoutRef.current !== null) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [sidecarStatus]);
+    };
+  }, []);
 
   const statusColor = useMemo(
     () =>

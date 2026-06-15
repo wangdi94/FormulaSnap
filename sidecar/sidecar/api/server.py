@@ -6,6 +6,7 @@ import os
 import signal
 import threading
 import time
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -29,6 +30,8 @@ logger = logging.getLogger(__name__)
 
 
 _SHUTDOWN_TIMEOUT = 10.0  # seconds per engine aclose()
+_SHUTDOWN_TOKEN: str = os.environ.get("FORMULASNAP_SHUTDOWN_TOKEN", "") or str(uuid.uuid4())
+logger.info("Shutdown token: %s", _SHUTDOWN_TOKEN)
 
 
 @asynccontextmanager
@@ -126,6 +129,10 @@ class SaveKeyRequest(BaseModel):
     key: str = Field(..., min_length=1)
 
 
+class ShutdownRequest(BaseModel):
+    token: str = ""
+
+
 class KeyStatusItem(BaseModel):
     backend: str
     configured: bool
@@ -184,8 +191,12 @@ async def health():
 
 
 @app.post("/shutdown")
-async def shutdown():
-    """优雅关闭端点：返回 200 后通过信号触发 uvicorn graceful shutdown。"""
+async def shutdown(request: Request, body: ShutdownRequest = ShutdownRequest()):
+    """优雅关闭端点：需要 token 认证，返回 200 后通过信号触发 uvicorn graceful shutdown。"""
+    # Token 可来自请求体或 X-Shutdown-Token 头
+    token = body.token or request.headers.get("X-Shutdown-Token", "")
+    if token != _SHUTDOWN_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid shutdown token")
     logger.info("收到 shutdown 请求，准备退出...")
 
     # 使用定时器延迟发送信号，确保 HTTP 响应先发送完成

@@ -1,10 +1,11 @@
 import asyncio
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from sidecar.api.server import _engines, app, get_engine, register_engine
+from sidecar.api.server import _SHUTDOWN_TOKEN, _engines, app, get_engine, register_engine
 from sidecar.cache import ocr_cache
 from sidecar.ocr_engines.cost_tracker import cost_tracker
 from sidecar.ocr_engines.interface import (
@@ -47,7 +48,7 @@ def test_health_endpoint(client):
 
 def test_shutdown_endpoint(client):
     with patch("sidecar.api.server.signal.raise_signal"):
-        response = client.post("/shutdown")
+        response = client.post("/shutdown", json={"token": _SHUTDOWN_TOKEN})
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "shutting_down"
@@ -59,7 +60,7 @@ def test_shutdown_graceful(client):
     from sidecar.api.server import lifespan
 
     with patch("sidecar.api.server.signal.raise_signal"):
-        response = client.post("/shutdown")
+        response = client.post("/shutdown", json={"token": _SHUTDOWN_TOKEN})
         assert response.status_code == 200
         assert response.json() == {"status": "shutting_down"}
 
@@ -73,6 +74,49 @@ def test_shutdown_graceful(client):
         mock_engine.aclose.assert_called_once()
 
     asyncio.run(_verify_cleanup())
+
+
+# ---------------------------------------------------------------------------
+# Shutdown authentication
+# ---------------------------------------------------------------------------
+
+
+def test_shutdown_requires_token(client):
+    response = client.post("/shutdown")
+    assert response.status_code == 403
+
+
+def test_shutdown_wrong_token(client):
+    response = client.post("/shutdown", json={"token": "wrong-token"})
+    assert response.status_code == 403
+
+
+def test_shutdown_correct_token(client):
+    with patch("sidecar.api.server.signal.raise_signal"):
+        response = client.post("/shutdown", json={"token": _SHUTDOWN_TOKEN})
+        assert response.status_code == 200
+        assert response.json()["status"] == "shutting_down"
+
+
+def test_shutdown_token_from_header(client):
+    with patch("sidecar.api.server.signal.raise_signal"):
+        response = client.post(
+            "/shutdown", headers={"X-Shutdown-Token": _SHUTDOWN_TOKEN}
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "shutting_down"
+
+
+def test_shutdown_token_from_env():
+    import os
+
+    with patch.dict(os.environ, {"FORMULASNAP_SHUTDOWN_TOKEN": "env-token"}):
+        result = os.environ.get("FORMULASNAP_SHUTDOWN_TOKEN", "") or str(uuid.uuid4())
+        assert result == "env-token"
+
+    with patch.dict(os.environ, {"FORMULASNAP_SHUTDOWN_TOKEN": ""}, clear=False):
+        result = os.environ.get("FORMULASNAP_SHUTDOWN_TOKEN", "") or str(uuid.uuid4())
+        assert len(result) == 36
 
 
 def test_ocr_endpoint_valid_request(client):
@@ -497,3 +541,110 @@ def test_request_logging_skips_health(client, caplog):
 
     matching = [r for r in caplog.records if "/health" in r.getMessage()]
     assert len(matching) == 0
+
+
+# ---------------------------------------------------------------------------
+# API Key management endpoints
+# ---------------------------------------------------------------------------
+
+
+def test_get_keys_returns_masked(client):
+    """GET /api/keys returns configured status — never exposes actual key values."""
+    mock_stored = {
+        ("openai", "api_key"): "sk-1234567890abcdef",
+        ("mathpix", "app_id"): "mathpix-id-12345",
+    }
+
+    def _mock_get_key(service, key_name):
+        return mock_stored.get((service, key_name))
+
+    with patch("sidecar.api.server.key_manager") as mock_km:
+        mock_km.get_key = MagicMock(side_effect=_mock_get_key)
+
+        response = client.get("/api/keys")
+        assert response.status_code == 200
+        data = response.json()
+        assert "keys" in data
+        keys = data["keys"]
+        assert len(keys) == 5
+
+        response_text = str(data)
+        assert "sk-1234567890abcdef" not in response_text
+        assert "mathpix-id-12345" not in response_text
+
+        openai_entry = next(k for k in keys if k["backend"] == "openai")
+        assert openai_entry["configured"] is True
+
+        mathpix_id_entry = next(k for k in keys if k["backend"] == "mathpix_app_id")
+        assert mathpix_id_entry["configured"] is True
+
+        claude_entry = next(k for k in keys if k["backend"] == "claude")
+        assert claude_entry["configured"] is False
+
+        gemini_entry = next(k for k in keys if k["backend"] == "gemini")
+        assert gemini_entry["configured"] is False
+
+
+def test_set_key_works(client):
+    """POST /api/keys with valid backend/key succeeds and calls key_manager."""
+    with patch("sidecar.api.server.key_manager") as mock_km:
+        mock_km.set_key = MagicMock()
+
+        response = client.post(
+            "/api/keys",
+            json={"backend": "openai", "key": "sk-test-abcdef123456"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+        assert data["backend"] == "openai"
+        mock_km.set_key.assert_called_once_with(
+            "openai", "api_key", "sk-test-abcdef123456"
+        )
+
+
+def test_set_key_empty_value_rejected(client):
+    """POST /api/keys with empty key_value is rejected by Pydantic validation."""
+    response = client.post(
+        "/api/keys",
+        json={"backend": "openai", "key": ""},
+    )
+    assert response.status_code == 422
+
+
+def test_set_key_unknown_backend_rejected(client):
+    """POST /api/keys with unknown backend returns 400."""
+    response = client.post(
+        "/api/keys",
+        json={"backend": "nonexistent", "key": "some-key-value"},
+    )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert "Unknown backend" in detail
+
+
+@pytest.mark.skip(reason="DELETE /api/keys endpoint not yet implemented — TDD spec")
+def test_delete_key_works(client):
+    """DELETE /api/keys with valid backend succeeds (TDD spec for future endpoint)."""
+    with patch("sidecar.api.server.key_manager") as mock_km:
+        mock_km.delete_key = MagicMock(return_value=True)
+
+        response = client.delete(
+            "/api/keys",
+            json={"backend": "openai"},
+        )
+        assert response.status_code == 200
+        mock_km.delete_key.assert_called_once_with("openai", "api_key")
+
+
+@pytest.mark.skip(reason="DELETE /api/keys endpoint not yet implemented — TDD spec")
+def test_delete_key_not_found(client):
+    """DELETE /api/keys for non-existent key returns 404 (TDD spec for future endpoint)."""
+    with patch("sidecar.api.server.key_manager") as mock_km:
+        mock_km.delete_key = MagicMock(return_value=False)
+
+        response = client.delete(
+            "/api/keys",
+            json={"backend": "openai"},
+        )
+        assert response.status_code == 404

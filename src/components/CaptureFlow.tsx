@@ -4,10 +4,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { callOcr, type OcrResponse, type OcrBackend, SidecarError, checkSidecarHealth } from "../lib/sidecarClient";
 import { loadSettings } from "../lib/settings";
-import { getBackendLabel } from "../lib/constants";
 import { t } from "../lib/i18n";
-import FormulaPreview from "./FormulaPreview";
 import { Spinner } from "./Spinner";
+import CapturePreview from "./capture/CapturePreview";
+import OcrResultDisplay from "./capture/OcrResultDisplay";
+import CaptureActions from "./capture/CaptureActions";
 
 type FlowState = "idle" | "selecting" | "capturing" | "ocr-loading" | "result" | "error" | "sidecar-offline";
 
@@ -290,13 +291,7 @@ export default function CaptureFlow() {
         <div className="flex flex-col items-center space-y-4 py-12" role="status" aria-live="polite">
           <Spinner size="lg" className="text-blue-500" title={t('common.loading')} />
           <p className="text-gray-500 dark:text-gray-400">{t('capture.ocr_loading')}</p>
-          {imageBase64 && (
-            <img
-              src={`data:image/png;base64,${imageBase64}`}
-              alt={t('capture.screenshot_preview')}
-              className="max-w-xs max-h-32 object-contain rounded border border-gray-200 dark:border-gray-700 opacity-60"
-            />
-          )}
+          {imageBase64 && <CapturePreview imageBase64={imageBase64} variant="loading" />}
         </div>
       )}
 
@@ -321,92 +316,22 @@ export default function CaptureFlow() {
               </div>
             </div>
           </div>
-          <div className="flex justify-center gap-3">
-            {error.retryable && (
-              <button
-                type="button"
-                onClick={handleRetry}
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors text-sm font-medium"
-              >
-                {t('common.retry')}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleReset}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md transition-colors text-sm font-medium"
-            >
-              {t('capture.retake')}
-            </button>
-          </div>
+          <CaptureActions
+            mode="error"
+            retryable={error.retryable}
+            onRetry={handleRetry}
+            onReset={handleReset}
+          />
         </div>
       )}
 
       {state === "result" && result && (
         <div className="w-full space-y-4">
-          <FormulaPreview latex={result.latex} readOnly={false} />
+          <OcrResultDisplay result={result} />
 
-          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-2">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-              <div className="text-gray-500 dark:text-gray-400">{t('capture.backend')}</div>
-              <div className="text-gray-900 dark:text-gray-100 font-medium">
-                {getBackendLabel(result.backend)}
-              </div>
+          {imageBase64 && <CapturePreview imageBase64={imageBase64} variant="result" />}
 
-              <div className="text-gray-500 dark:text-gray-400">{t('capture.confidence')}</div>
-              <div className="text-gray-900 dark:text-gray-100 font-medium">
-                <span
-                  className={
-                    result.confidence >= 0.8
-                      ? "text-green-600 dark:text-green-400"
-                      : result.confidence >= 0.5
-                        ? "text-yellow-600 dark:text-yellow-400"
-                        : "text-red-600 dark:text-red-400"
-                  }
-                >
-                  {(result.confidence * 100).toFixed(1)}%
-                </span>
-              </div>
-
-              <div className="text-gray-500 dark:text-gray-400">{t('capture.timing')}</div>
-              <div className="text-gray-900 dark:text-gray-100 font-medium">{result.timing_ms} ms</div>
-
-              {result.cost_estimate?.estimated_cost_usd != null && result.cost_estimate.estimated_cost_usd > 0 && (
-                <>
-                  <div className="text-gray-500 dark:text-gray-400">{t('capture.cost')}</div>
-                  <div className="text-gray-900 dark:text-gray-100 font-medium">
-                    ${result.cost_estimate.estimated_cost_usd.toFixed(4)}
-                    {result.cost_estimate.tokens_used != null && (
-                      <span className="text-gray-400 text-xs ml-1">({result.cost_estimate.tokens_used} tokens)</span>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {imageBase64 && (
-            <details className="group">
-              <summary className="cursor-pointer text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
-                {t('capture.screenshot_preview')}
-              </summary>
-              <img
-                src={`data:image/png;base64,${imageBase64}`}
-                alt={t('capture.screenshot')}
-                className="mt-2 max-w-full rounded border border-gray-200 dark:border-gray-700"
-              />
-            </details>
-          )}
-
-          <div className="flex justify-center gap-3">
-            <button
-              type="button"
-              onClick={handleReset}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors text-sm font-medium"
-            >
-              {t('capture.new_screenshot')}
-            </button>
-          </div>
+          <CaptureActions mode="result" onReset={handleReset} />
         </div>
       )}
     </div>
