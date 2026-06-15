@@ -181,11 +181,11 @@ pub fn start_sidecar(app: &AppHandle) -> Result<(), String> {
                     let stderr = stderr_health.lock().unwrap();
                     let stderr_text = stderr.join(" | ");
                     if stderr_text.is_empty() {
-                        format!("Sidecar 进程意外退出（退出码: {code}），请查看应用日志获取详细信息")
-                    } else {
                         format!(
-                            "Sidecar 进程意外退出（退出码: {code}）: {stderr_text}"
+                            "Sidecar 进程意外退出（退出码: {code}），请查看应用日志获取详细信息"
                         )
+                    } else {
+                        format!("Sidecar 进程意外退出（退出码: {code}）: {stderr_text}")
                     }
                 } else {
                     e

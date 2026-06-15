@@ -145,7 +145,12 @@ impl Log for StderrLogger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            eprintln!("[{}] {}: {}", record.level(), record.module_path().unwrap_or("unknown"), record.args());
+            eprintln!(
+                "[{}] {}: {}",
+                record.level(),
+                record.module_path().unwrap_or("unknown"),
+                record.args()
+            );
         }
     }
 
@@ -205,9 +210,18 @@ mod tests {
     #[test]
     fn stderr_logger_filters_by_level() {
         let logger = StderrLogger;
-        let warn_meta = log::Metadata::builder().level(Level::Warn).target("test").build();
-        let info_meta = log::Metadata::builder().level(Level::Info).target("test").build();
-        let error_meta = log::Metadata::builder().level(Level::Error).target("test").build();
+        let warn_meta = log::Metadata::builder()
+            .level(Level::Warn)
+            .target("test")
+            .build();
+        let info_meta = log::Metadata::builder()
+            .level(Level::Info)
+            .target("test")
+            .build();
+        let error_meta = log::Metadata::builder()
+            .level(Level::Error)
+            .target("test")
+            .build();
 
         assert!(logger.enabled(&warn_meta), "Warn 应该启用");
         assert!(!logger.enabled(&info_meta), "Info 应该禁用");
@@ -294,7 +308,8 @@ mod tests {
 
         let logs = take_logs();
         assert!(
-            logs.iter().any(|l| l.contains("中毒") || l.contains("mutex")),
+            logs.iter()
+                .any(|l| l.contains("中毒") || l.contains("mutex")),
             "mutex 中毒时应输出 diagnostic warning，实际日志: {:?}",
             logs
         );

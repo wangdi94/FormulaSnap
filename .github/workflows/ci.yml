@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
@@ -69,6 +69,9 @@ jobs:
         run: |
           mkdir -p src-tauri/binaries
           touch src-tauri/binaries/formulasnap-sidecar-x86_64-pc-windows-msvc.exe
+      - name: Format check
+        run: cargo fmt --check
+        working-directory: src-tauri
       - name: Run tests
         run: cargo test --lib
         working-directory: src-tauri

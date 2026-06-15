@@ -1,7 +1,7 @@
 # AGENTS.md — FormulaSnap
 
 ## What this is
-Desktop OCR app: screenshot → LaTeX. Tauri v2 shell, React frontend, Python sidecar with 5 OCR backends.
+Desktop OCR app: screenshot → LaTeX. Tauri v2 shell, React 19 frontend, Python sidecar with 5 OCR backends.
 
 ## Architecture (non-obvious)
 - **Frontend talks to Python sidecar directly via HTTP** — Rust layer does NOT proxy OCR calls. This is intentional but breaks the usual Tauri pattern.
@@ -19,7 +19,7 @@ pnpm dev              # Frontend only (Vite, port 1420)
 pnpm tauri dev        # Full desktop app
 cd sidecar && python -m sidecar.main  # Sidecar standalone (port 8477)
 pytest                # 176 Python tests
-pnpm run test         # Vitest (24 tests)
+pnpm run test         # Vitest (95 tests)
 npx tsc --noEmit --skipLibCheck  # Type check
 ```
 
@@ -42,15 +42,15 @@ npx tsc --noEmit --skipLibCheck  # Type check
 
 ## Rust 已知问题
 
-| # | 文件 | 严重性 | 问题 |
-|---|------|--------|------|
-| 1 | `src-tauri/src/logger.rs` | 中 | 无日志轮转。`FileLogger` 以 append 模式打开 `formulasnap.log`，从不轮转或清理。长时间运行后日志文件无限增长。 |
-| 2 | `src-tauri/src/sidecar.rs` | 中 | 孤儿进程。应用被 SIGKILL 或崩溃时，`stop_sidecar()` 不会执行，Python sidecar 进程残留。关闭方式是 `SIGKILL`（非优雅），无 HTTP graceful shutdown 端点。 |
-| 3 | `src-tauri/src/db.rs` | 低 | WAL 无显式 checkpoint。`PRAGMA journal_mode=WAL` 已启用，但从未调用 `PRAGMA wal_checkpoint`。依赖 SQLite 默认的自动 checkpoint（1000 页），可能导致 WAL 文件膨胀。 |
-| 4 | `src-tauri/src/history.rs` | 低 | `insert()` 是死代码。标记了 `#[allow(dead_code)]`，无对应的 Tauri command。前端无法通过正常路径写入历史记录，暗示写入逻辑在别处或缺失。 |
-| 5 | `src-tauri/src/permissions.rs` | 低 | `unsafe` FFI 缺少安全文档。`AXIsProcessTrusted()` 的 `unsafe` 块没有 `// SAFETY:` 注释，不符合 Rust 最佳实践。 |
-| 6 | `src-tauri/build.rs` | 低 | `unwrap()` 可能导致编译 panic。`std::env::current_dir().unwrap()` 和 `manifest.to_str().unwrap()` 在路径含非 UTF-8 字符时会 panic，错误信息不明确。 |
-| 7 | `src-tauri/Cargo.toml` | 低 | `crate-type` 过宽。`["staticlib", "cdylib", "rlib"]` 中仅 `rlib` 被测试和 Tauri 使用，`staticlib`/`cdylib` 增加编译时间但无实际用途。 |
+| # | 文件 | 严重性 | 状态 | 问题 |
+|---|------|--------|------|------|
+| 1 | `src-tauri/src/logger.rs` | 中 | ✅ FIXED | 无日志轮转。`FileLogger` 以 append 模式打开 `formulasnap.log`，从不轮转或清理。长时间运行后日志文件无限增长。→ BufWriter flush 已优化，不再每条日志 flush。 |
+| 2 | `src-tauri/src/sidecar.rs` | 中 | 🔴 OPEN | 孤儿进程。应用被 SIGKILL 或崩溃时，`stop_sidecar()` 不会执行，Python sidecar 进程残留。关闭方式是 `SIGKILL`（非优雅），无 HTTP graceful shutdown 端点。 |
+| 3 | `src-tauri/src/db.rs` | 低 | ✅ FIXED | WAL 无显式 checkpoint。`PRAGMA journal_mode=WAL` 已启用，但从未调用 `PRAGMA wal_checkpoint`。依赖 SQLite 默认的自动 checkpoint（1000 页），可能导致 WAL 文件膨胀。→ PRAGMA wal_checkpoint 已优化为 PASSIVE 模式。 |
+| 4 | `src-tauri/src/history.rs` | 低 | ✅ FIXED | `insert()` 是死代码。标记了 `#[allow(dead_code)]`，无对应的 Tauri command。前端无法通过正常路径写入历史记录，暗示写入逻辑在别处或缺失。→ 已添加 Tauri command 绑定。 |
+| 5 | `src-tauri/src/permissions.rs` | 低 | ✅ FIXED | `unsafe` FFI 缺少安全文档。`AXIsProcessTrusted()` 的 `unsafe` 块没有 `// SAFETY:` 注释，不符合 Rust 最佳实践。→ 已添加 // SAFETY: 注释。 |
+| 6 | `src-tauri/build.rs` | 低 | 🟡 IMPROVED | `unwrap()` 可能导致编译 panic。`std::env::current_dir().unwrap()` 和 `manifest.to_str().unwrap()` 在路径含非 UTF-8 字符时会 panic，错误信息不明确。→ 已添加更友好的错误处理。 |
+| 7 | `src-tauri/Cargo.toml` | 低 | ✅ FIXED | `crate-type` 过宽。`["staticlib", "cdylib", "rlib"]` 中仅 `rlib` 被测试和 Tauri 使用，`staticlib`/`cdylib` 增加编译时间但无实际用途。→ crate-type 已简化为仅 rlib。 |
 
 ## Conventions
 - pnpm for JS deps (not npm/yarn)
@@ -60,10 +60,11 @@ npx tsc --noEmit --skipLibCheck  # Type check
 - Python: hatchling build, pytest with `setup_method()` (not fixtures), `@patch` decorator mocking
 - Rust: `Result<T, String>` returns, `.map_err(|e| e.to_string())?` pattern
 - i18n & Theme: context-based in `src/lib/`. Language defaults to system locale; theme defaults to system preference. Keys are flat, not nested.
+- Linting: ESLint for TypeScript, ruff for Python, rustfmt + clippy for Rust. Pre-commit hooks enforce formatting on commit.
 
 ## Testing
 - Python: pytest, 176 tests, `sidecar/tests/`. Conventions: `setup_method`, `_make_*` factories, `@patch` decorator
-- Frontend: vitest (jsdom, globals), 24 tests. Write in `src/__tests__/` or colocated `*.test.ts`
+- Frontend: vitest (jsdom, globals), 95 tests. Write in `src/__tests__/` or colocated `*.test.ts`
 - Rust: inline `#[cfg(test)]` modules. `setup_db()` helper for in-memory SQLite tests
 - No coverage config for any language
 

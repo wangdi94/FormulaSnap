@@ -78,12 +78,7 @@ pub fn capture_screen() -> Result<Vec<u8>, String> {
 /// (x, y) is the top-left corner; width/height define the region size.
 /// Returns PNG-encoded bytes.
 /// Uses a 10-second timeout to prevent indefinite hangs from xcap platform APIs.
-pub fn capture_region(
-    x: u32,
-    y: u32,
-    width: u32,
-    height: u32,
-) -> Result<Vec<u8>, String> {
+pub fn capture_region(x: u32, y: u32, width: u32, height: u32) -> Result<Vec<u8>, String> {
     let (tx, rx) = mpsc::channel();
 
     // 注意：超时后此线程会被孤立（orphaned）。这是可接受的权衡：
@@ -145,19 +140,13 @@ mod tests {
     #[test]
     fn test_capture_screen_returns_result() {
         // 验证函数签名返回 Result<Vec<u8>, String>
-        fn assert_return_type(
-            _f: fn() -> Result<Vec<u8>, String>,
-        ) {
-        }
+        fn assert_return_type(_f: fn() -> Result<Vec<u8>, String>) {}
         assert_return_type(capture_screen);
     }
 
     #[test]
     fn test_capture_region_returns_result() {
-        fn assert_return_type(
-            _f: fn(u32, u32, u32, u32) -> Result<Vec<u8>, String>,
-        ) {
-        }
+        fn assert_return_type(_f: fn(u32, u32, u32, u32) -> Result<Vec<u8>, String>) {}
         assert_return_type(capture_region);
     }
 }

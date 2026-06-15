@@ -84,8 +84,14 @@ fn insert_history(
     screenshot_path: Option<String>,
 ) -> Result<i64, String> {
     let conn = state.0.lock().map_err(|e| e.to_string())?;
-    history::insert(&conn, &latex, &backend, confidence, screenshot_path.as_deref())
-        .map_err(|e| e.to_string())
+    history::insert(
+        &conn,
+        &latex,
+        &backend,
+        confidence,
+        screenshot_path.as_deref(),
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

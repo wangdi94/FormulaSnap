@@ -67,9 +67,19 @@ Inline `#[cfg(test)]` modules in db.rs, tray.rs (6 tests), hotkey.rs (4 tests).
 Tests cover: CRUD, pagination, FTS search, empty results, idempotent migration.
 Run: `cargo test` from `src-tauri/`.
 
+## Linting
+
+Rust: `rustfmt` + `clippy` (`cargo clippy -- -D warnings`). Pre-commit hooks enforce formatting on commit.
+
 ## Known Issues
 
-- No `tauri-plugin-shell` sidecar cleanup on crash (process stays orphaned if app force-killed).
+- ✅ FIXED: logger.rs — BufWriter flush 已优化，不再每条日志 flush
+- 🔴 OPEN: sidecar.rs — No `tauri-plugin-shell` sidecar cleanup on crash (process stays orphaned if app force-killed).
+- ✅ FIXED: db.rs — PRAGMA wal_checkpoint 已优化为 PASSIVE 模式
+- ✅ FIXED: history.rs — 已添加 Tauri command 绑定
+- ✅ FIXED: permissions.rs — 已添加 // SAFETY: 注释
+- 🟡 IMPROVED: build.rs — 已添加更友好的错误处理
+- ✅ FIXED: Cargo.toml — crate-type 已简化为仅 rlib
 
 ## Adding a New Command
 
