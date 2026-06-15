@@ -1,7 +1,8 @@
 """Tests for Claude Vision OCR engine."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 
 from sidecar.ocr_engines.claude_engine import ClaudeEngine
 from sidecar.ocr_engines.interface import (
@@ -11,16 +12,16 @@ from sidecar.ocr_engines.interface import (
     OcrOptions,
     OcrResult,
     RateLimitError,
-    ValidationResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _mock_anthropic_response(text: str = "$E = mc^2$", input_tokens: int = 500, output_tokens: int = 265):
+def _mock_anthropic_response(
+    text: str = "$E = mc^2$", input_tokens: int = 500, output_tokens: int = 265
+):
     """Build a fake Anthropic messages.create response."""
     content_block = MagicMock()
     content_block.text = text
@@ -200,3 +201,33 @@ class TestClaudeEngine:
 
         mod.ANTHROPIC_AVAILABLE = orig_avail
         mod.anthropic = orig_mod
+
+    # -- aclose -------------------------------------------------------------
+
+    async def test_aclose_calls_client_close(self):
+        """aclose() calls client.close() and sets _client to None."""
+        mock_client = MagicMock()
+        mock_client.close = AsyncMock()
+        self.engine._client = mock_client
+
+        await self.engine.aclose()
+
+        mock_client.close.assert_awaited_once()
+        assert self.engine._client is None
+
+    async def test_aclose_no_client(self):
+        """aclose() is safe when _client is already None."""
+        self.engine._client = None
+        await self.engine.aclose()  # Should not raise
+
+    async def test_aclose_idempotent(self):
+        """Calling aclose() twice does not error; close() called only once."""
+        mock_client = MagicMock()
+        mock_client.close = AsyncMock()
+        self.engine._client = mock_client
+
+        await self.engine.aclose()
+        await self.engine.aclose()  # Second call — no error
+
+        mock_client.close.assert_awaited_once()
+        assert self.engine._client is None

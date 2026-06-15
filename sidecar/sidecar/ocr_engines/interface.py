@@ -13,9 +13,8 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Optional, Protocol
 from dataclasses import dataclass
-
+from typing import Protocol
 
 # ---------------------------------------------------------------------------
 # Data Classes
@@ -64,8 +63,8 @@ class OcrResult:
     latex: str
     backend: str
     timing_ms: int
-    confidence: Optional[float] = None
-    cost_estimate: Optional[CostEstimate] = None
+    confidence: float | None = None
+    cost_estimate: CostEstimate | None = None
 
 
 @dataclass
@@ -122,7 +121,7 @@ class RateLimitError(OcrError):
         retry_after: Optional number of seconds to wait before retrying.
     """
 
-    def __init__(self, message: str, retry_after: Optional[int] = None):
+    def __init__(self, message: str, retry_after: int | None = None):
         super().__init__(message)
         self.retry_after = retry_after
 
@@ -183,7 +182,7 @@ class OcrBackend(Protocol):
         """
         ...
 
-    def estimate_cost(self, image: bytes) -> Optional[CostEstimate]:
+    def estimate_cost(self, image: bytes) -> CostEstimate | None:
         """Estimate the cost of recognizing an image.
 
         Args:
@@ -202,7 +201,7 @@ class OcrBackend(Protocol):
         """
         ...
 
-    def get_rate_limit_status(self) -> Optional[RateLimitStatus]:
+    def get_rate_limit_status(self) -> RateLimitStatus | None:
         """Get the current rate limit status.
 
         Returns:

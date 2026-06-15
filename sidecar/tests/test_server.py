@@ -472,3 +472,28 @@ def test_shutdown_aclose_exception_continues():
         mock_good.aclose.assert_called_once()
 
     asyncio.run(_verify())
+
+
+# ---------------------------------------------------------------------------
+# Request logging middleware
+# ---------------------------------------------------------------------------
+
+
+def test_request_logging(client, caplog):
+    with caplog.at_level("INFO", logger="sidecar.api.server"):
+        client.get("/api/stats")
+
+    matching = [r for r in caplog.records if "/api/stats" in r.getMessage()]
+    assert len(matching) == 1
+    msg = matching[0].getMessage()
+    assert "GET" in msg
+    assert "200" in msg
+    assert "ms]" in msg
+
+
+def test_request_logging_skips_health(client, caplog):
+    with caplog.at_level("INFO", logger="sidecar.api.server"):
+        client.get("/health")
+
+    matching = [r for r in caplog.records if "/health" in r.getMessage()]
+    assert len(matching) == 0

@@ -4,8 +4,11 @@ Covers:
 - Rate limiting (daily limit, minimum interval)
 - Cost statistics tracking
 - Key manager CRUD operations
+- Data persistence across restarts (save/load JSON)
 """
 
+import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -618,3 +621,149 @@ class TestDailyCount:
 
         tracker.reset()
         assert tracker.get_stats().calls_today == 0
+
+
+# =========================================================================
+# Persistence Tests
+# =========================================================================
+
+
+class TestPersistence:
+    """Tests for cost_tracker JSON persistence across restarts."""
+
+    def _make_tracker_with_file(self, tmp_path: Path, time_fn):
+        """Create a CostTracker with persistence wired to a tmp file.
+
+        Normally persistence is disabled when time_fn is provided.
+        This helper sets _data_file after construction so we can test
+        _save_to_file / _load_from_file with controlled time.
+        """
+        tracker = CostTracker(time_fn=time_fn)
+        tracker._data_file = tmp_path / "cost_stats.json"
+        return tracker
+
+    def test_save_to_file_writes_json(self, tmp_path):
+        """_save_to_file writes records as a JSON array with correct fields."""
+        current_time = 1000.0
+        tracker = self._make_tracker_with_file(tmp_path, lambda: current_time)
+
+        tracker.record_call("openai", tokens_used=765, cost_usd=0.005)
+        current_time += 3.0
+        tracker.record_call("mathpix", tokens_used=500, cost_usd=0.002)
+
+        tracker._save_to_file()
+
+        data_file = tracker._data_file
+        assert data_file is not None and data_file.exists()
+
+        with open(data_file) as f:
+            data = json.load(f)
+
+        assert isinstance(data, list)
+        assert len(data) == 2
+
+        assert data[0]["backend"] == "openai"
+        assert data[0]["tokens_used"] == 765
+        assert data[0]["cost_usd"] == pytest.approx(0.005)
+        assert data[0]["timestamp"] == 1000.0
+
+        assert data[1]["backend"] == "mathpix"
+        assert data[1]["tokens_used"] == 500
+        assert data[1]["cost_usd"] == pytest.approx(0.002)
+        assert data[1]["timestamp"] == 1003.0
+
+    def test_load_from_file_restores_state(self, tmp_path):
+        """A new tracker loading a saved file restores all records."""
+        current_time = 5000.0
+
+        writer = self._make_tracker_with_file(tmp_path, lambda: current_time)
+        writer.record_call("openai", tokens_used=100, cost_usd=0.001)
+        current_time += 3.0
+        writer.record_call("claude", tokens_used=200, cost_usd=0.002)
+        current_time += 3.0
+        writer.record_call("gemini", tokens_used=300, cost_usd=0.003)
+        writer._save_to_file()
+
+        current_time = 5010.0
+        reader = self._make_tracker_with_file(tmp_path, lambda: current_time)
+        reader._load_from_file()
+
+        records = reader.get_records()
+        assert len(records) == 3
+        assert records[0].backend == "openai"
+        assert records[1].backend == "claude"
+        assert records[2].backend == "gemini"
+        assert records[2].tokens_used == 300
+
+        stats = reader.get_stats()
+        assert stats.total_calls == 3
+        assert stats.total_tokens == 600
+        assert stats.estimated_cost_usd == pytest.approx(0.006)
+
+    def test_old_records_pruned_on_load(self, tmp_path):
+        """Records older than 24h are filtered out on _load_from_file."""
+        now = 100_000.0
+
+        old_ts = now - 25 * 3600
+        recent_ts = now - 1 * 3600
+        data = [
+            {"backend": "openai", "tokens_used": 100, "cost_usd": 0.001, "timestamp": old_ts},
+            {"backend": "mathpix", "tokens_used": 200, "cost_usd": 0.002, "timestamp": recent_ts},
+            {
+                "backend": "claude",
+                "tokens_used": 300,
+                "cost_usd": 0.003,
+                "timestamp": recent_ts + 10,
+            },
+        ]
+        data_file = tmp_path / "cost_stats.json"
+        with open(data_file, "w") as f:
+            json.dump(data, f)
+
+        tracker = self._make_tracker_with_file(tmp_path, lambda: now)
+        tracker._load_from_file()
+
+        records = tracker.get_records()
+        assert len(records) == 2
+        assert all(r.backend != "openai" for r in records)
+        assert records[0].backend == "mathpix"
+        assert records[1].backend == "claude"
+
+    def test_load_from_missing_file(self, tmp_path):
+        """Loading from a non-existent file yields empty state, no crash."""
+        tracker = self._make_tracker_with_file(
+            tmp_path, lambda: 1000.0,
+        )
+        assert tracker._data_file is not None and not tracker._data_file.exists()
+
+        tracker._load_from_file()
+
+        assert tracker.get_records() == []
+        stats = tracker.get_stats()
+        assert stats.total_calls == 0
+        assert stats.total_tokens == 0
+
+    def test_cross_midnight_budget_reset(self, tmp_path):
+        """Records saved at 23:59 correctly reset daily count after midnight."""
+        from datetime import datetime, timezone
+
+        before_midnight = datetime(2024, 1, 1, 23, 59, 50, tzinfo=timezone.utc).timestamp()
+        current_time = before_midnight
+
+        writer = self._make_tracker_with_file(tmp_path, lambda: current_time)
+        writer.record_call("openai", tokens_used=100, cost_usd=0.001)
+        current_time += 3.0
+        writer.record_call("openai", tokens_used=100, cost_usd=0.001)
+        writer._save_to_file()
+
+        assert writer.get_stats().calls_today == 2
+
+        after_midnight = datetime(2024, 1, 2, 0, 0, 10, tzinfo=timezone.utc).timestamp()
+        current_time = after_midnight
+
+        reader = self._make_tracker_with_file(tmp_path, lambda: current_time)
+        reader._load_from_file()
+
+        assert reader.get_stats().total_calls == 2
+        assert reader.get_stats().calls_today == 0
+        assert reader.get_stats().remaining_today == 100

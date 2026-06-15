@@ -33,6 +33,7 @@ class _StubEngine:
         self.call_count += 1
         if self._error is not None:
             raise self._error
+        assert self._result is not None
         return self._result
 
     def estimate_cost(self, image: bytes):
@@ -110,6 +111,39 @@ class TestEngineManagerCircuitBreaker:
     def setup_method(self) -> None:
         self.opts = OcrOptions()
         self.image = b"\x89PNG"
+
+    def test_circuit_breaker_closed_initially(self) -> None:
+        primary = _StubEngine(result=_make_result("gemini"))
+        secondary = _StubEngine(result=_make_result("openai"))
+
+        mgr = EngineManager([("gemini", primary), ("openai", secondary)])
+
+        for name in ("gemini", "openai"):
+            breaker = mgr.get_breaker(name)
+            assert breaker is not None
+            assert breaker.allow_request()
+            assert breaker.consecutive_failures == 0
+
+    def test_circuit_breaker_resets_on_success(self) -> None:
+        failing_engine = _StubEngine(error=OcrError("boom"))
+        working_engine = _StubEngine(result=_make_result("openai"))
+
+        mgr = EngineManager([("gemini", failing_engine), ("openai", working_engine)])
+        loop = asyncio.get_event_loop()
+
+        breaker = mgr.get_breaker("gemini")
+        assert breaker is not None
+
+        for _ in range(2):
+            loop.run_until_complete(mgr.recognize(self.image, self.opts))
+        assert breaker.consecutive_failures == 2
+        assert breaker.allow_request()
+
+        mgr._chain[0] = ("gemini", _StubEngine(result=_make_result("gemini")), breaker)
+        loop.run_until_complete(mgr.recognize(self.image, self.opts))
+
+        assert breaker.consecutive_failures == 0
+        assert breaker.allow_request()
 
     def test_circuit_breaker_opens_after_3_failures(self) -> None:
         primary = _StubEngine(error=OcrError("boom"))

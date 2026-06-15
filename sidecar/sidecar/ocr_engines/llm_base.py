@@ -9,8 +9,6 @@ Provides shared utilities for LLM-based OCR engines:
 from __future__ import annotations
 
 import re
-from typing import Optional
-
 
 SYSTEM_PROMPT = (
     "You are a LaTeX OCR engine. Extract ALL mathematical formulas and text "

@@ -1,18 +1,17 @@
 """Contract tests for OCR backend interface definitions."""
 
-import pytest
 from sidecar.ocr_engines.interface import (
-    OcrBackend,
-    OcrResult,
+    ApiKeyError,
     CostEstimate,
+    NetworkError,
+    OcrBackend,
+    OcrError,
     OcrOptions,
+    OcrResult,
+    ParseError,
+    RateLimitError,
     RateLimitStatus,
     ValidationResult,
-    OcrError,
-    ApiKeyError,
-    RateLimitError,
-    NetworkError,
-    ParseError,
 )
 
 
@@ -160,6 +159,6 @@ class TestOcrBackendProtocol:
             assert "get_rate_limit_status" in members
         else:
             # Python 3.10 fallback: check annotations on the Protocol class
-            hints = get_type_hints(OcrBackend)
+            get_type_hints(OcrBackend)
             for name in ("recognize", "estimate_cost", "validate_config", "get_rate_limit_status"):
                 assert name in dir(OcrBackend), f"{name} not found in OcrBackend"

@@ -9,7 +9,6 @@ from __future__ import annotations
 import base64
 import os
 import time
-from typing import Optional
 
 import httpx
 
@@ -38,12 +37,12 @@ class MathpixEngine:
 
     def __init__(
         self,
-        app_id: Optional[str] = None,
-        app_key: Optional[str] = None,
+        app_id: str | None = None,
+        app_key: str | None = None,
     ) -> None:
         self._app_id = app_id or os.environ.get("MATHPIX_APP_ID", "")
         self._app_key = app_key or os.environ.get("MATHPIX_APP_KEY", "")
-        self._client: Optional[httpx.AsyncClient] = httpx.AsyncClient(timeout=30.0)
+        self._client: httpx.AsyncClient | None = httpx.AsyncClient(timeout=30.0)
 
     # ------------------------------------------------------------------
     # OcrBackend protocol methods
@@ -131,7 +130,7 @@ class MathpixEngine:
             ),
         )
 
-    def estimate_cost(self, image: bytes) -> Optional[CostEstimate]:
+    def estimate_cost(self, image: bytes) -> CostEstimate | None:
         """Return a fixed-rate cost estimate for a Mathpix request."""
         return CostEstimate(
             tokens_used=765,
@@ -154,7 +153,7 @@ class MathpixEngine:
 
         return ValidationResult(valid=True, message="Credentials format valid")
 
-    def get_rate_limit_status(self) -> Optional[RateLimitStatus]:
+    def get_rate_limit_status(self) -> RateLimitStatus | None:
         """Return rate-limit information (Mathpix does not expose this in advance)."""
         return None
 

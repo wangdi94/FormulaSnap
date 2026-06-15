@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, startTransition } from "react";
+import { useState, useEffect, useCallback, useRef, startTransition, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import type { HistoryEntry } from "../types/history";
@@ -199,45 +199,11 @@ export default function HistoryPage() {
       ) : (
         <div className="space-y-2">
           {entries.map((entry) => (
-            <button
-              type="button"
+            <HistoryListItem
               key={entry.id}
+              entry={entry}
               onClick={() => navigate(`/history/${entry.id}`)}
-              className="w-full text-left bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
-                         rounded-lg p-4 hover:border-blue-300 dark:hover:border-blue-600
-                         hover:shadow-sm transition-all group cursor-pointer"
-            >
-              {/* LaTeX 预览 */}
-              <p className="text-sm font-mono text-gray-800 dark:text-gray-200 truncate leading-relaxed">
-                {truncateLatex(entry.latex)}
-              </p>
-
-              {/* 元信息行 */}
-              <div className="mt-2.5 flex items-center gap-3 text-xs">
-                {/* 后端标签 */}
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full font-medium ${
-                    BACKEND_COLORS[entry.backend] ??
-                    "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                  }`}
-                >
-                  {getBackendLabel(entry.backend)}
-                </span>
-
-                {/* 置信度 */}
-                <span className={`font-mono ${confidenceColor(entry.confidence)}`}>
-                  {(entry.confidence * 100).toFixed(0)}%
-                </span>
-
-                {/* 时间 */}
-                <span className="text-gray-400 dark:text-gray-500 ml-auto">
-                  {formatTime(entry.created_at)}
-                </span>
-
-                {/* 箭头 */}
-                <ChevronRightIcon className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors" />
-              </div>
-            </button>
+            />
           ))}
         </div>
       )}
@@ -278,9 +244,54 @@ export default function HistoryPage() {
   );
 }
 
+/* ━━━ HistoryListItem ━━━ */
+
+const HistoryListItem = memo(function HistoryListItem({
+  entry,
+  onClick,
+}: {
+  entry: HistoryEntry;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full text-left bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
+                 rounded-lg p-4 hover:border-blue-300 dark:hover:border-blue-600
+                 hover:shadow-sm transition-all group cursor-pointer"
+    >
+      <p className="text-sm font-mono text-gray-800 dark:text-gray-200 truncate leading-relaxed">
+        {truncateLatex(entry.latex)}
+      </p>
+
+      <div className="mt-2.5 flex items-center gap-3 text-xs">
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded-full font-medium ${
+            BACKEND_COLORS[entry.backend] ??
+            "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+          }`}
+        >
+          {getBackendLabel(entry.backend)}
+        </span>
+
+        <span className={`font-mono ${confidenceColor(entry.confidence)}`}>
+          {(entry.confidence * 100).toFixed(0)}%
+        </span>
+
+        <span className="text-gray-400 dark:text-gray-500 ml-auto">
+          {formatTime(entry.created_at)}
+        </span>
+
+        <ChevronRightIcon className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors" />
+      </div>
+    </button>
+  );
+});
+
 /* ━━━ 内联 SVG 图标 ━━━ */
 
-function SearchIcon({ className }: { className?: string }) {
+const SearchIcon = memo(function SearchIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -297,9 +308,9 @@ function SearchIcon({ className }: { className?: string }) {
       />
     </svg>
   );
-}
+});
 
-function XIcon({ className }: { className?: string }) {
+const XIcon = memo(function XIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -316,9 +327,9 @@ function XIcon({ className }: { className?: string }) {
       />
     </svg>
   );
-}
+});
 
-function DocumentIcon({ className }: { className?: string }) {
+const DocumentIcon = memo(function DocumentIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -335,9 +346,9 @@ function DocumentIcon({ className }: { className?: string }) {
       />
     </svg>
   );
-}
+});
 
-function ChevronRightIcon({ className }: { className?: string }) {
+const ChevronRightIcon = memo(function ChevronRightIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -354,4 +365,4 @@ function ChevronRightIcon({ className }: { className?: string }) {
       />
     </svg>
   );
-}
+});

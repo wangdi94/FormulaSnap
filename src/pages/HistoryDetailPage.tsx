@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import type { HistoryEntry } from "../types/history";
@@ -108,8 +108,24 @@ export default function HistoryDetailPage() {
   }, [entry, navigate]);
 
   /* ── 截图 URL ── */
-  const screenshotUrl =
-    entry?.screenshot_path ? convertFileSrc(entry.screenshot_path) : null;
+  const screenshotUrl = useMemo(
+    () => (entry?.screenshot_path ? convertFileSrc(entry.screenshot_path) : null),
+    [entry],
+  );
+
+  /* ── 置信度颜色 ── */
+  const confidenceColorClass = useMemo(() => {
+    if (!entry) return "";
+    if (entry.confidence >= 0.8) return "text-green-600 dark:text-green-400";
+    if (entry.confidence >= 0.5) return "text-yellow-600 dark:text-yellow-400";
+    return "text-red-600 dark:text-red-400";
+  }, [entry]);
+
+  /* ── 格式化时间 ── */
+  const formattedTime = useMemo(
+    () => (entry ? new Date(entry.created_at).toLocaleString(getLocale()) : ""),
+    [entry],
+  );
 
   /* ── 加载中 ── */
   if (loading) {
@@ -198,22 +214,14 @@ export default function HistoryDetailPage() {
 
           <div className="text-gray-500 dark:text-gray-400">{t('history.confidence')}</div>
           <div className="text-gray-900 dark:text-gray-100 font-medium">
-            <span
-              className={
-                entry.confidence >= 0.8
-                  ? "text-green-600 dark:text-green-400"
-                  : entry.confidence >= 0.5
-                    ? "text-yellow-600 dark:text-yellow-400"
-                    : "text-red-600 dark:text-red-400"
-              }
-            >
+            <span className={confidenceColorClass}>
               {(entry.confidence * 100).toFixed(1)}%
             </span>
           </div>
 
           <div className="text-gray-500 dark:text-gray-400">{t('history.created_at')}</div>
           <div className="text-gray-900 dark:text-gray-100 font-medium">
-            {new Date(entry.created_at).toLocaleString(getLocale())}
+            {formattedTime}
           </div>
 
           <div className="text-gray-500 dark:text-gray-400">{t('history.latex_label')}</div>
@@ -279,7 +287,7 @@ export default function HistoryDetailPage() {
 
 /* ━━━ 子组件 ━━━ */
 
-function CopyButton({
+const CopyButton = memo(function CopyButton({
   label,
   state,
   onClick,
@@ -322,11 +330,11 @@ function CopyButton({
       )}
     </button>
   );
-}
+});
 
 /* ━━━ SVG 图标 ━━━ */
 
-function ArrowLeftIcon({ className }: { className?: string }) {
+const ArrowLeftIcon = memo(function ArrowLeftIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -343,9 +351,9 @@ function ArrowLeftIcon({ className }: { className?: string }) {
       />
     </svg>
   );
-}
+});
 
-function ExclamationIcon({ className }: { className?: string }) {
+const ExclamationIcon = memo(function ExclamationIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -362,9 +370,9 @@ function ExclamationIcon({ className }: { className?: string }) {
       />
     </svg>
   );
-}
+});
 
-function CheckIcon({ className }: { className?: string }) {
+const CheckIcon = memo(function CheckIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -381,4 +389,4 @@ function CheckIcon({ className }: { className?: string }) {
       />
     </svg>
   );
-}
+});

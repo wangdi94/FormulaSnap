@@ -2,12 +2,12 @@
 
 import asyncio
 import time
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import patch, MagicMock
 
-from sidecar.ocr_engines.pix2text_engine import Pix2TextEngine
 from sidecar.ocr_engines.interface import OcrOptions, OcrResult, ValidationResult
+from sidecar.ocr_engines.pix2text_engine import Pix2TextEngine
 
 
 class TestPix2TextEngine:
@@ -43,7 +43,9 @@ class TestPix2TextEngine:
 
     @patch("sidecar.ocr_engines.pix2text_engine.Pix2Text")
     @patch("PIL.Image.open")
-    async def test_recognize_returns_highest_confidence_formula(self, mock_image_open, mock_p2t_class):
+    async def test_recognize_returns_highest_confidence_formula(
+        self, mock_image_open, mock_p2t_class
+    ):
         """When multiple formulas are found, return the one with highest confidence."""
         mock_p2t = MagicMock()
         mock_p2t.recognize_page.return_value = [
@@ -215,3 +217,9 @@ class TestPix2TextEngine:
         for r in results:
             assert isinstance(r, OcrResult)
             assert r.confidence == 0.9
+
+    # -- aclose -------------------------------------------------------------
+
+    def test_aclose_not_implemented(self):
+        """Pix2Text is a local synchronous engine — no aclose() method."""
+        assert not hasattr(self.engine, "aclose")

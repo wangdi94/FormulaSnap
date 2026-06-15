@@ -8,7 +8,6 @@ from __future__ import annotations
 import base64
 import os
 import time
-from typing import Optional
 
 try:
     import anthropic
@@ -24,6 +23,7 @@ except ImportError:
     _RateLimitError = Exception
     _APIConnectionError = Exception
 
+from sidecar.ocr_engines.image_utils import detect_mime_type
 from sidecar.ocr_engines.interface import (
     ApiKeyError,
     CostEstimate,
@@ -31,11 +31,12 @@ from sidecar.ocr_engines.interface import (
     OcrError,
     OcrOptions,
     OcrResult,
-    RateLimitError as OcrRateLimitError,
     RateLimitStatus,
     ValidationResult,
 )
-from sidecar.ocr_engines.image_utils import detect_mime_type
+from sidecar.ocr_engines.interface import (
+    RateLimitError as OcrRateLimitError,
+)
 from sidecar.ocr_engines.llm_base import LlmProvider
 
 # Claude Sonnet pricing (per million tokens)
@@ -46,7 +47,7 @@ CLAUDE_OUTPUT_COST = 15.0 / 1_000_000
 class ClaudeEngine(LlmProvider):
     """Anthropic Claude Sonnet Vision OCR backend."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         self._api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
         self._client = None  # 延迟初始化
 
@@ -122,7 +123,7 @@ class ClaudeEngine(LlmProvider):
             ),
         )
 
-    def estimate_cost(self, image: bytes) -> Optional[CostEstimate]:
+    def estimate_cost(self, image: bytes) -> CostEstimate | None:
         """Estimate cost based on Claude Sonnet rates."""
         input_tokens = self._estimate_tokens(image)
         output_tokens = 265  # estimated output
@@ -138,7 +139,7 @@ class ClaudeEngine(LlmProvider):
 
         return ValidationResult(valid=True, message="API key format valid")
 
-    def get_rate_limit_status(self) -> Optional[RateLimitStatus]:
+    def get_rate_limit_status(self) -> RateLimitStatus | None:
         """Anthropic doesn't expose rate limit info via SDK."""
         return None
 

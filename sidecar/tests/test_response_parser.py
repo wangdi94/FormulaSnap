@@ -10,15 +10,12 @@ Covers:
 - Math mode delimiter pairing: $...$, $$...$$, \\(...\\), \\[...\\]
 """
 
-import pytest
 
 from sidecar.ocr_engines.response_parser import (
+    MAX_LATEX_LENGTH,
     clean_llm_response,
     validate_latex,
-    ValidationResult,
-    MAX_LATEX_LENGTH,
 )
-
 
 # =========================================================================
 # clean_llm_response
@@ -285,7 +282,10 @@ class TestLongResponseWarning:
         long_latex = "x" * (MAX_LATEX_LENGTH + 1)
         result = validate_latex(long_latex)
         assert result.valid is False
-        assert "long" in result.message.lower() or "length" in result.message.lower() or "超" in result.message
+        assert any(
+            keyword in result.message.lower()
+            for keyword in ["long", "length", "超"]
+        )
 
     def test_response_at_limit_passes_length_check(self):
         """A response exactly at the limit should not trigger the length warning."""
@@ -298,3 +298,210 @@ class TestLongResponseWarning:
     def test_short_response_no_length_warning(self):
         result = validate_latex("x + y")
         assert result.valid is True
+
+
+# =========================================================================
+# Edge-case tests
+# =========================================================================
+
+
+class TestEdgeCases:
+    """Edge-case coverage for validate_latex and clean_llm_response."""
+
+    # --- 1. Dangerous commands: each rejected individually ----------------
+
+    def test_dangerous_commands(self):
+        """Every dangerous command variant is individually rejected."""
+        dangerous_inputs = [
+            ("\\input{file}", "input"),
+            ("\\write18{ls}", "write"),
+            ("\\exec{code}", "exec"),
+            ("\\immediate\\write18{cmd}", "immediate"),
+            # Boundary: command at end of string
+            ("x + \\input{f}", "input"),
+            # Boundary: command followed by digit (not letter)
+            ("\\write18", "write"),
+        ]
+        for latex, label in dangerous_inputs:
+            result = validate_latex(latex)
+            assert result.valid is False, f"Expected rejection for '{label}': {latex}"
+            assert "dangerous" in result.message.lower() or label in result.message.lower()
+
+    def test_shell_escape_not_in_blocklist(self):
+        """\\shellescape is NOT in the current dangerous-command regex.
+
+        This test documents the current behavior — if \\shellescape should
+        be blocked, update _DANGEROUS_COMMANDS in response_parser.py.
+        """
+        result = validate_latex("\\shellescape{cmd}")
+        # Currently passes because \shellescape is not in the regex
+        assert result.valid is True
+
+    # --- 2. Unmatched brackets: various combos ---------------------------
+
+    def test_unmatched_brackets(self):
+        """Various unbalanced bracket combinations are rejected."""
+        cases = [
+            ("{a + b", "open brace"),
+            ("a + b}", "close brace"),
+            ("[a + b", "open bracket"),
+            ("a + b]", "close bracket"),
+            ("(a + b", "open paren"),
+            ("a + b)", "close paren"),
+            # Mismatched pairs
+            ("{a + b]", "brace closed by bracket"),
+            ("[a + b}", "bracket closed by brace"),
+            ("(a + b}", "paren closed by brace"),
+            ("{a + b)", "brace closed by paren"),
+        ]
+        for latex, label in cases:
+            result = validate_latex(latex)
+            assert result.valid is False, f"Expected rejection for '{label}': {latex}"
+
+    # --- 3. Deeply nested brackets (up to 50 levels) --------------------
+
+    def test_nested_brackets_deep(self):
+        """50 levels of nested braces should validate correctly."""
+        depth = 50
+        nested = "{" * depth + "x" + "}" * depth
+        result = validate_latex(nested)
+        assert result.valid is True
+
+    def test_nested_brackets_deep_unbalanced(self):
+        """50 opens + 49 closes = one unmatched brace → rejected."""
+        depth = 50
+        nested = "{" * depth + "x" + "}" * (depth - 1)
+        result = validate_latex(nested)
+        assert result.valid is False
+
+    def test_nested_mixed_bracket_types(self):
+        """Mixed bracket nesting: { [ ( x ) ] } should pass."""
+        result = validate_latex("{ [ ( x ) ] }")
+        assert result.valid is True
+
+    def test_nested_mixed_bracket_mismatch(self):
+        """{ [ ( x ) } ] has brace closed by bracket → rejected."""
+        result = validate_latex("{ [ ( x ) } ]")
+        assert result.valid is False
+
+    # --- 4. Math delimiter imbalance ------------------------------------
+
+    def test_delimiter_imbalance(self):
+        """Unmatched $, $$, \\(, \\[ pairs are rejected."""
+        cases = [
+            ("$x + y", "single open dollar"),
+            ("x + y$", "single close dollar"),
+            ("$$$x$$", "three dollars (odd)"),
+            ("$x$ $y", "two pairs, second unclosed"),
+            ("\\(x + y", "open paren delimiter"),
+            ("x + y\\)", "close paren delimiter"),
+            ("\\[x + y", "open bracket delimiter"),
+            ("x + y\\]", "close bracket delimiter"),
+        ]
+        for latex, label in cases:
+            result = validate_latex(latex)
+            assert result.valid is False, f"Expected rejection for '{label}': {latex}"
+
+    def test_delimiter_balance_valid_combinations(self):
+        """Correctly paired delimiters should pass."""
+        cases = [
+            "$x$",
+            "$$x$$",
+            "\\(x\\)",
+            "\\[x\\]",
+            "$x$ and $y$",
+            "$$a$$ and $$b$$",
+        ]
+        for latex in cases:
+            result = validate_latex(latex)
+            assert result.valid is True, f"Expected valid: {latex}"
+
+    # --- 5. Extremely long input (>10KB) --------------------------------
+
+    def test_extremely_long_input(self):
+        """A 10KB+ LaTeX string should be rejected by the length check."""
+        # Build a realistic long LaTeX expression: repeated \frac{a}{b} + ...
+        chunk = "\\frac{a}{b} + "
+        # Each chunk ~15 chars → need ~700 chunks for >10_000 chars
+        repeats = (MAX_LATEX_LENGTH // len(chunk)) + 10
+        long_latex = chunk * repeats
+        assert len(long_latex) > MAX_LATEX_LENGTH
+
+        result = validate_latex(long_latex)
+        assert result.valid is False
+        assert "long" in result.message.lower() or "length" in result.message.lower()
+
+    def test_long_valid_latex_at_boundary(self):
+        """Exactly MAX_LATEX_LENGTH chars of valid LaTeX should pass length check."""
+        # Use a simple repeating pattern that is structurally valid
+        # "x + " is 4 chars each → 2500 repeats = 10_000 chars
+        latex = "x + " * (MAX_LATEX_LENGTH // 4)
+        assert len(latex) == MAX_LATEX_LENGTH
+
+        result = validate_latex(latex)
+        # Should not fail due to length (bracket/delimiter checks pass too)
+        assert result.valid is True
+
+    # --- 6. Unicode / math symbols --------------------------------------
+
+    def test_unicode_math_symbols(self):
+        """Greek letters, integrals, sums, and other Unicode math symbols."""
+        cases = [
+            "\\alpha + \\beta = \\gamma",
+            "\\int_{0}^{\\infty} e^{-x} \\, dx",
+            "\\sum_{i=1}^{n} x_i^2",
+            "\\prod_{k=1}^{n} \\frac{1}{k}",
+            "\\partial f / \\partial x",
+            "\\nabla \\cdot \\vec{F}",
+            "\\forall x \\in \\mathbb{R}",
+            "\\exists y : y > 0",
+            "\\lim_{x \\to 0} \\frac{\\sin x}{x}",
+            "\\lambda \\otimes \\mu \\oplus \\nu",
+        ]
+        for latex in cases:
+            result = validate_latex(latex)
+            assert result.valid is True, f"Expected valid for unicode math: {latex}"
+
+    def test_unicode_in_clean_response(self):
+        """clean_llm_response should preserve Unicode math symbols."""
+        raw = "```latex\n\\alpha + \\beta\\n```"
+        result = clean_llm_response(raw)
+        assert "\\alpha" in result
+        assert "\\beta" in result
+
+    # --- 7. Empty and whitespace-only inputs -----------------------------
+
+    def test_empty_and_whitespace(self):
+        """Empty string, spaces-only, and tabs-only should all clean to empty."""
+        cases = [
+            "",
+            "   ",
+            "\t\t\t",
+            "\n\n\n",
+            "  \t \n  ",
+            "\r\n",
+        ]
+        for raw in cases:
+            result = clean_llm_response(raw)
+            assert result == "", f"Expected empty for {raw!r}, got {result!r}"
+
+    def test_empty_latex_validates(self):
+        """Empty string is structurally valid (no brackets/delimiters to mismatch)."""
+        result = validate_latex("")
+        assert result.valid is True
+
+    # --- 8. Mixed dangerous + valid content ------------------------------
+
+    def test_mixed_dangerous_and_valid(self):
+        """A valid-looking formula with a dangerous command embedded is rejected."""
+        cases = [
+            # Dangerous command buried in valid expression
+            "\\frac{a}{b} + \\input{malicious} + \\sqrt{x}",
+            # Valid preamble, dangerous at end
+            "\\alpha + \\beta \\write18{rm}",
+            # Dangerous in subscript
+            "\\sum_{\\exec{cmd}}^{n} x_i",
+        ]
+        for latex in cases:
+            result = validate_latex(latex)
+            assert result.valid is False, f"Expected rejection for mixed input: {latex}"

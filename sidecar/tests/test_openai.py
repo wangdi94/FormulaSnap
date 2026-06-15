@@ -1,9 +1,9 @@
 """Tests for OpenAI Vision OCR engine."""
 
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from sidecar.ocr_engines.openai_engine import OpenAIEngine
+import pytest
+
 from sidecar.ocr_engines.interface import (
     ApiKeyError,
     CostEstimate,
@@ -12,9 +12,8 @@ from sidecar.ocr_engines.interface import (
     OcrOptions,
     OcrResult,
     RateLimitError,
-    ValidationResult,
 )
-
+from sidecar.ocr_engines.openai_engine import OpenAIEngine
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -219,3 +218,33 @@ class TestOpenAIEngine:
 
         mod.OPENAI_AVAILABLE = orig_avail
         mod.openai = orig_mod
+
+    # -- aclose -------------------------------------------------------------
+
+    async def test_aclose_calls_client_close(self):
+        """aclose() calls client.close() and sets _client to None."""
+        mock_client = MagicMock()
+        mock_client.close = AsyncMock()
+        self.engine._client = mock_client
+
+        await self.engine.aclose()
+
+        mock_client.close.assert_awaited_once()
+        assert self.engine._client is None
+
+    async def test_aclose_no_client(self):
+        """aclose() is safe when _client is already None."""
+        self.engine._client = None
+        await self.engine.aclose()  # Should not raise
+
+    async def test_aclose_idempotent(self):
+        """Calling aclose() twice does not error; close() called only once."""
+        mock_client = MagicMock()
+        mock_client.close = AsyncMock()
+        self.engine._client = mock_client
+
+        await self.engine.aclose()
+        await self.engine.aclose()  # Second call — no error
+
+        mock_client.close.assert_awaited_once()
+        assert self.engine._client is None

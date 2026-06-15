@@ -8,7 +8,6 @@ from __future__ import annotations
 import base64
 import os
 import time
-from typing import Optional
 
 try:
     import openai
@@ -26,6 +25,7 @@ except ImportError:
     _RateLimitError = Exception
     _APIConnectionError = Exception
 
+from sidecar.ocr_engines.image_utils import detect_mime_type
 from sidecar.ocr_engines.interface import (
     ApiKeyError,
     CostEstimate,
@@ -33,11 +33,12 @@ from sidecar.ocr_engines.interface import (
     OcrError,
     OcrOptions,
     OcrResult,
-    RateLimitError as OcrRateLimitError,
     RateLimitStatus,
     ValidationResult,
 )
-from sidecar.ocr_engines.image_utils import detect_mime_type
+from sidecar.ocr_engines.interface import (
+    RateLimitError as OcrRateLimitError,
+)
 from sidecar.ocr_engines.llm_base import LlmProvider
 
 # gpt-4o pricing (per million tokens)
@@ -48,7 +49,7 @@ OPENAI_OUTPUT_COST = 10.00 / 1_000_000
 class OpenAIEngine(LlmProvider):
     """OpenAI GPT-4o Vision OCR backend."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         self._api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
         self._client = None  # AsyncOpenAI, 延迟初始化
 
@@ -120,7 +121,7 @@ class OpenAIEngine(LlmProvider):
             ),
         )
 
-    def estimate_cost(self, image: bytes) -> Optional[CostEstimate]:
+    def estimate_cost(self, image: bytes) -> CostEstimate | None:
         """Estimate cost based on gpt-4o rates."""
         tokens = self._estimate_tokens(image)
         cost_usd = tokens * OPENAI_INPUT_COST + 265 * OPENAI_OUTPUT_COST
@@ -138,7 +139,7 @@ class OpenAIEngine(LlmProvider):
 
         return ValidationResult(valid=True, message="API key format valid")
 
-    def get_rate_limit_status(self) -> Optional[RateLimitStatus]:
+    def get_rate_limit_status(self) -> RateLimitStatus | None:
         """OpenAI doesn't expose rate limit info via SDK."""
         return None
 

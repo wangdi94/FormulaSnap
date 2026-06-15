@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, memo } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { loadSettings } from "../lib/settings";
 import { t } from "../lib/i18n";
@@ -7,7 +7,7 @@ import { checkSidecarHealth } from "../lib/sidecarClient";
 
 type SidecarStatus = "connecting" | "ready" | "error";
 
-export default function StatusBar() {
+export default memo(function StatusBar() {
   const [backendLabel, setBackendLabel] = useState(getBackendLabel("pix2text"));
   const [sidecarStatus, setSidecarStatus] = useState<SidecarStatus>("connecting");
   const [sidecarError, setSidecarError] = useState<string | null>(null);
@@ -63,19 +63,25 @@ export default function StatusBar() {
     return () => clearInterval(interval);
   }, [sidecarStatus]);
 
-  const statusColor =
-    sidecarStatus === "ready"
-      ? "bg-green-500"
-      : sidecarStatus === "error"
-        ? "bg-red-500"
-        : "bg-yellow-500 animate-pulse";
+  const statusColor = useMemo(
+    () =>
+      sidecarStatus === "ready"
+        ? "bg-green-500"
+        : sidecarStatus === "error"
+          ? "bg-red-500"
+          : "bg-yellow-500 animate-pulse",
+    [sidecarStatus],
+  );
 
-  const statusText =
-    sidecarStatus === "ready"
-      ? t("status.ready")
-      : sidecarStatus === "error"
-        ? t("status.sidecar_error")
-        : t("status.sidecar_connecting");
+  const statusText = useMemo(
+    () =>
+      sidecarStatus === "ready"
+        ? t("status.ready")
+        : sidecarStatus === "error"
+          ? t("status.sidecar_error")
+          : t("status.sidecar_connecting"),
+    [sidecarStatus],
+  );
 
   return (
     <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
@@ -88,4 +94,4 @@ export default function StatusBar() {
       </div>
     </footer>
   );
-}
+});

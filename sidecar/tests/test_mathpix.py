@@ -1,11 +1,15 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-import httpx as real_httpx
-from sidecar.ocr_engines.mathpix_engine import MathpixEngine
+
 from sidecar.ocr_engines.interface import (
-    OcrOptions, OcrResult, ValidationResult, CostEstimate,
-    ApiKeyError, RateLimitError, NetworkError
+    ApiKeyError,
+    OcrOptions,
+    OcrResult,
+    RateLimitError,
+    ValidationResult,
 )
+from sidecar.ocr_engines.mathpix_engine import MathpixEngine
 
 
 def _make_async_client_mock(response: MagicMock) -> MagicMock:
@@ -80,3 +84,33 @@ class TestMathpixEngine:
         result = engine.validate_config()
         assert isinstance(result, ValidationResult)
         assert result.valid is True
+
+    # -- aclose -------------------------------------------------------------
+
+    async def test_aclose_calls_client_aclose(self):
+        """aclose() calls httpx client's aclose() and sets _client to None."""
+        mock_client = MagicMock()
+        mock_client.aclose = AsyncMock()
+        self.engine._client = mock_client
+
+        await self.engine.aclose()
+
+        mock_client.aclose.assert_awaited_once()
+        assert self.engine._client is None
+
+    async def test_aclose_no_client(self):
+        """aclose() is safe when _client is already None."""
+        self.engine._client = None
+        await self.engine.aclose()  # Should not raise
+
+    async def test_aclose_idempotent(self):
+        """Calling aclose() twice does not error; aclose() called only once."""
+        mock_client = MagicMock()
+        mock_client.aclose = AsyncMock()
+        self.engine._client = mock_client
+
+        await self.engine.aclose()
+        await self.engine.aclose()  # Second call — no error
+
+        mock_client.aclose.assert_awaited_once()
+        assert self.engine._client is None

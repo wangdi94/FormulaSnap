@@ -1,12 +1,17 @@
 """Tests for LLM-based OCR engines (OpenAI Vision)."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from sidecar.ocr_engines.openai_engine import OpenAIEngine
+
 from sidecar.ocr_engines.interface import (
-    OcrOptions, OcrResult, ApiKeyError,
-    NetworkError, RateLimitError,
+    ApiKeyError,
+    NetworkError,
+    OcrOptions,
+    OcrResult,
+    RateLimitError,
 )
+from sidecar.ocr_engines.openai_engine import OpenAIEngine
 
 
 class TestOpenAIEngine:

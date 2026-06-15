@@ -5,10 +5,11 @@ import logging
 import os
 import signal
 import threading
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -63,6 +64,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ---------------------------------------------------------------------------
+# Request logging middleware
+# ---------------------------------------------------------------------------
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    path = request.url.path
+    if path == "/health":
+        return await call_next(request)
+
+    start = time.time()
+    response: Response = await call_next(request)
+    elapsed_ms = round((time.time() - start) * 1000)
+    logger.info(
+        "%s %s -> %d [%dms]",
+        request.method,
+        path,
+        response.status_code,
+        elapsed_ms,
+    )
+    return response
 
 
 # ---------------------------------------------------------------------------

@@ -382,6 +382,29 @@ class TestGeminiEngine:
         self.engine._client = None
         await self.engine.aclose()
 
+    @patch("sidecar.ocr_engines.gemini_engine.genai")
+    async def test_gemini_aclose_idempotent(self, mock_genai):
+        """Calling aclose() twice does not error; close() called only once."""
+        mock_client = MagicMock()
+        mock_client.close = AsyncMock()
+        self.engine._client = mock_client
+
+        await self.engine.aclose()
+        await self.engine.aclose()  # Second call — no error
+
+        mock_client.close.assert_awaited_once()
+        assert self.engine._client is None
+
+    @patch("sidecar.ocr_engines.gemini_engine.genai")
+    async def test_gemini_aclose_client_without_close(self, mock_genai):
+        """aclose() handles client that has no close() method gracefully."""
+        mock_client = MagicMock(spec=[])  # No attributes
+        self.engine._client = mock_client
+
+        await self.engine.aclose()
+
+        assert self.engine._client is None
+
 
 class TestDetectMimeType:
     """Tests for detect_mime_type helper."""
