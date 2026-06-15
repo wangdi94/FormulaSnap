@@ -24,7 +24,7 @@ npx tsc --noEmit --skipLibCheck  # Type check
 ```
 
 ## Where things live
-- `src/` — React pages (4 routes), components (9), lib utilities (6)
+- `src/` — React frontend. 5 pages, 17 components, 8 lib utilities. See [src/AGENTS.md](src/AGENTS.md) for full breakdown.
 - `src-tauri/src/` — 9 Rust modules. `db.rs` = history, `screenshot.rs` = xcap capture, `hotkey.rs` = Ctrl+Shift+C, `tray.rs` = system tray
 - `sidecar/sidecar/` — FastAPI server + OCR engine implementations
 - `sidecar/tests/` — 11 Python test files, pytest conventions
