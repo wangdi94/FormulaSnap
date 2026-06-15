@@ -46,7 +46,7 @@ def test_health_endpoint(client):
 
 
 def test_shutdown_endpoint(client):
-    with patch("sidecar.api.server.os._exit"):
+    with patch("sidecar.api.server.signal.raise_signal"):
         response = client.post("/shutdown")
         assert response.status_code == 200
         data = response.json()
@@ -58,7 +58,7 @@ def test_shutdown_graceful(client):
 
     from sidecar.api.server import lifespan
 
-    with patch("sidecar.api.server.os._exit"):
+    with patch("sidecar.api.server.signal.raise_signal"):
         response = client.post("/shutdown")
         assert response.status_code == 200
         assert response.json() == {"status": "shutting_down"}
@@ -381,3 +381,94 @@ def test_ocr_endpoint_timeout_error_caught_directly(client):
         detail = response.json()["detail"]
         assert detail["error"] == "TIMEOUT"
         assert "120s" in detail["message"]
+
+
+# ---------------------------------------------------------------------------
+# Lifespan shutdown — engine cleanup
+# ---------------------------------------------------------------------------
+
+
+def test_shutdown_aclose_called_on_all_engines():
+    """All registered engines with aclose() get called during shutdown."""
+    from sidecar.api.server import lifespan
+
+    engines = {}
+    for name in ("pix2text", "openai", "claude"):
+        mock_engine = MagicMock()
+        mock_engine.aclose = AsyncMock()
+        engines[name] = mock_engine
+        _engines[name] = mock_engine
+
+    async def _verify():
+        async with lifespan(app):
+            pass
+        for name, engine in engines.items():
+            engine.aclose.assert_called_once()
+
+    asyncio.run(_verify())
+
+
+def test_shutdown_engine_without_aclose():
+    """Engine without aclose() is skipped without error."""
+    from sidecar.api.server import lifespan
+
+    mock_engine = MagicMock(spec=["recognize"])  # no aclose
+    _engines["bare"] = mock_engine
+
+    mock_with_close = MagicMock()
+    mock_with_close.aclose = AsyncMock()
+    _engines["with_close"] = mock_with_close
+
+    async def _verify():
+        async with lifespan(app):
+            pass
+        mock_with_close.aclose.assert_called_once()
+
+    asyncio.run(_verify())
+
+
+def test_shutdown_aclose_timeout():
+    """Engine whose aclose() exceeds timeout does not block shutdown."""
+    from sidecar.api.server import lifespan
+
+    async def _slow_close():
+        await asyncio.sleep(999)
+
+    mock_engine = MagicMock()
+    mock_engine.aclose = _slow_close
+    _engines["slow"] = mock_engine
+
+    mock_fast = MagicMock()
+    mock_fast.aclose = AsyncMock()
+    _engines["fast"] = mock_fast
+
+    async def _verify():
+        async with lifespan(app):
+            pass
+        mock_fast.aclose.assert_called_once()
+
+    with patch("sidecar.api.server._SHUTDOWN_TIMEOUT", 0.1):
+        asyncio.run(_verify())
+
+
+def test_shutdown_aclose_exception_continues():
+    """Exception in one engine's aclose() does not prevent others from closing."""
+    from sidecar.api.server import lifespan
+
+    async def _broken_close():
+        raise RuntimeError("broken")
+
+    mock_broken = MagicMock()
+    mock_broken.aclose = _broken_close
+    _engines["broken"] = mock_broken
+
+    mock_good = MagicMock()
+    mock_good.aclose = AsyncMock()
+    _engines["good"] = mock_good
+
+    async def _verify():
+        async with lifespan(app):
+            pass
+        mock_good.aclose.assert_called_once()
+
+    asyncio.run(_verify())

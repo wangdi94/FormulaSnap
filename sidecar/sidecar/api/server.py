@@ -3,6 +3,7 @@ import base64
 import binascii
 import logging
 import os
+import signal
 import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -26,18 +27,24 @@ from sidecar.ocr_engines.key_manager import key_manager
 logger = logging.getLogger(__name__)
 
 
+_SHUTDOWN_TIMEOUT = 10.0  # seconds per engine aclose()
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
     logger.info("Shutting down: closing OCR engines...")
     for name, engine in _engines.items():
         aclose_fn = getattr(engine, "aclose", None)
-        if aclose_fn is not None:
-            try:
-                await aclose_fn()
-                logger.info("Closed engine: %s", name)
-            except Exception:
-                logger.warning("Error closing engine %s", name, exc_info=True)
+        if aclose_fn is None:
+            continue
+        try:
+            await asyncio.wait_for(aclose_fn(), timeout=_SHUTDOWN_TIMEOUT)
+            logger.info("Closed engine: %s", name)
+        except TimeoutError:
+            logger.warning("Timeout closing engine %s after %.1fs", name, _SHUTDOWN_TIMEOUT)
+        except Exception:
+            logger.warning("Error closing engine %s", name, exc_info=True)
 
 
 app = FastAPI(title="FormulaSnap Sidecar", lifespan=lifespan)
@@ -153,15 +160,15 @@ async def health():
 
 @app.post("/shutdown")
 async def shutdown():
-    """优雅关闭端点：返回 200 后触发进程退出。"""
+    """优雅关闭端点：返回 200 后通过信号触发 uvicorn graceful shutdown。"""
     logger.info("收到 shutdown 请求，准备退出...")
 
-    # 使用定时器延迟退出，确保 HTTP 响应先发送完成
-    def _do_exit():
-        logger.info("执行进程退出")
-        os._exit(0)
+    # 使用定时器延迟发送信号，确保 HTTP 响应先发送完成
+    def _do_signal():
+        logger.info("发送 SIGTERM 信号触发 graceful shutdown")
+        signal.raise_signal(signal.SIGTERM)
 
-    threading.Timer(0.5, _do_exit).start()
+    threading.Timer(0.5, _do_signal).start()
     return {"status": "shutting_down"}
 
 

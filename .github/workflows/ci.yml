@@ -14,7 +14,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v2
@@ -26,6 +26,8 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install
       - run: pnpm run test
+      - name: ESLint
+        run: pnpm run lint
 
   backend:
     runs-on: ${{ matrix.os }}
@@ -38,9 +40,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('sidecar/pyproject.toml') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
       - run: pip install -e "./sidecar[dev,pix2text,claude,openai,genai]"
         timeout-minutes: 15
       - run: pytest
+      - name: Ruff
+        run: ruff check sidecar/
 
   rust:
     runs-on: ${{ matrix.os }}

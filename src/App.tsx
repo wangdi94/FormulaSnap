@@ -1,18 +1,20 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
 import Header from "./components/Header";
 import StatusBar from "./components/StatusBar";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/Toast";
-import HomePage from "./pages/HomePage";
-import HistoryPage from "./pages/HistoryPage";
-import HistoryDetailPage from "./pages/HistoryDetailPage";
-import SettingsPage from "./pages/SettingsPage";
-import SelectionPage from "./pages/SelectionPage";
+import { Spinner } from "./components/Spinner";
 import { applyTheme, getTheme } from "./lib/theme";
 import { initSidecarPort } from "./lib/sidecarClient";
 import "./App.css";
+
+const HomePage = lazy(() => import("./pages/HomePage"));
+const HistoryPage = lazy(() => import("./pages/HistoryPage"));
+const HistoryDetailPage = lazy(() => import("./pages/HistoryDetailPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const SelectionPage = lazy(() => import("./pages/SelectionPage"));
 
 function NavigationListener() {
   const navigate = useNavigate();
@@ -34,12 +36,14 @@ function MainLayout() {
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
       <Header />
       <main className="flex-1 overflow-auto">
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/history" element={<HistoryPage />} />
-          <Route path="/history/:id" element={<HistoryDetailPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-        </Routes>
+        <Suspense fallback={<div className="flex items-center justify-center h-full"><Spinner size="lg" /></div>}>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/history/:id" element={<HistoryDetailPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Routes>
+        </Suspense>
       </main>
       <StatusBar />
     </div>
@@ -66,7 +70,9 @@ function App() {
       <>
         <NavigationListener />
         <ErrorBoundary>
-          <SelectionPage />
+          <Suspense fallback={<div className="flex items-center justify-center h-full"><Spinner size="lg" /></div>}>
+            <SelectionPage />
+          </Suspense>
         </ErrorBoundary>
       </>
     );
