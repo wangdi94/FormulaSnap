@@ -63,9 +63,7 @@ class TestEngineManagerFallback:
         secondary = _StubEngine(result=_make_result("openai"))
 
         mgr = EngineManager([("gemini", primary), ("openai", secondary)])
-        result = asyncio.get_event_loop().run_until_complete(
-            mgr.recognize(self.image, self.opts)
-        )
+        result = asyncio.run(mgr.recognize(self.image, self.opts))
 
         assert result.backend == "gemini"
         assert result.latex == "x^2"
@@ -78,9 +76,7 @@ class TestEngineManagerFallback:
         secondary = _StubEngine(result=secondary_result)
 
         mgr = EngineManager([("gemini", primary), ("openai", secondary)])
-        result = asyncio.get_event_loop().run_until_complete(
-            mgr.recognize(self.image, self.opts)
-        )
+        result = asyncio.run(mgr.recognize(self.image, self.opts))
 
         assert result.backend == "openai"
         assert primary.call_count == 1
@@ -92,9 +88,7 @@ class TestEngineManagerFallback:
 
         mgr = EngineManager([("gemini", primary), ("openai", secondary)])
         try:
-            asyncio.get_event_loop().run_until_complete(
-                mgr.recognize(self.image, self.opts)
-            )
+            asyncio.run(mgr.recognize(self.image, self.opts))
             assert False, "Expected OcrError"
         except OcrError as e:
             assert "All OCR engines failed" in str(e)
@@ -129,18 +123,17 @@ class TestEngineManagerCircuitBreaker:
         working_engine = _StubEngine(result=_make_result("openai"))
 
         mgr = EngineManager([("gemini", failing_engine), ("openai", working_engine)])
-        loop = asyncio.get_event_loop()
 
         breaker = mgr.get_breaker("gemini")
         assert breaker is not None
 
         for _ in range(2):
-            loop.run_until_complete(mgr.recognize(self.image, self.opts))
+            asyncio.run(mgr.recognize(self.image, self.opts))
         assert breaker.consecutive_failures == 2
         assert breaker.allow_request()
 
         mgr._chain[0] = ("gemini", _StubEngine(result=_make_result("gemini")), breaker)
-        loop.run_until_complete(mgr.recognize(self.image, self.opts))
+        asyncio.run(mgr.recognize(self.image, self.opts))
 
         assert breaker.consecutive_failures == 0
         assert breaker.allow_request()
@@ -151,11 +144,10 @@ class TestEngineManagerCircuitBreaker:
         secondary = _StubEngine(result=secondary_result)
 
         mgr = EngineManager([("gemini", primary), ("openai", secondary)])
-        loop = asyncio.get_event_loop()
 
         # Fail primary 3 times to trip the breaker
         for _ in range(3):
-            result = loop.run_until_complete(mgr.recognize(self.image, self.opts))
+            result = asyncio.run(mgr.recognize(self.image, self.opts))
             assert result.backend == "openai"
 
         breaker = mgr.get_breaker("gemini")
@@ -166,7 +158,7 @@ class TestEngineManagerCircuitBreaker:
         # 4th call: primary should be skipped entirely (circuit OPEN)
         primary.call_count = 0
         secondary.call_count = 0
-        result = loop.run_until_complete(mgr.recognize(self.image, self.opts))
+        result = asyncio.run(mgr.recognize(self.image, self.opts))
         assert result.backend == "openai"
         assert primary.call_count == 0  # skipped
         assert secondary.call_count == 1
@@ -185,13 +177,12 @@ class TestEngineManagerCircuitBreaker:
             secondary = _StubEngine(result=_make_result("openai"))
 
             mgr = EngineManager([("gemini", primary), ("openai", secondary)])
-            loop = asyncio.get_event_loop()
 
             # Fail primary 3 times to open the breaker
             fail_engine = _StubEngine(error=OcrError("down"))
             mgr._chain[0] = ("gemini", fail_engine, mgr._chain[0][2])
             for _ in range(3):
-                loop.run_until_complete(mgr.recognize(self.image, self.opts))
+                asyncio.run(mgr.recognize(self.image, self.opts))
 
             breaker = mgr.get_breaker("gemini")
             assert breaker is not None
@@ -204,7 +195,7 @@ class TestEngineManagerCircuitBreaker:
             mgr._chain[0] = ("gemini", primary, breaker)
             assert breaker.allow_request()  # HALF_OPEN → allows probe
 
-            result = loop.run_until_complete(mgr.recognize(self.image, self.opts))
+            result = asyncio.run(mgr.recognize(self.image, self.opts))
             assert result.backend == "gemini"
             assert breaker.allow_request()  # CLOSED after success
 
@@ -214,17 +205,16 @@ class TestEngineManagerCircuitBreaker:
         secondary = _StubEngine(result=_make_result("openai"))
 
         mgr = EngineManager([("gemini", primary), ("openai", secondary)])
-        loop = asyncio.get_event_loop()
 
         # Trip the breaker
         for _ in range(3):
-            loop.run_until_complete(mgr.recognize(self.image, self.opts))
+            asyncio.run(mgr.recognize(self.image, self.opts))
 
         # Reset call counts
         primary.call_count = 0
         secondary.call_count = 0
 
-        result = loop.run_until_complete(mgr.recognize(self.image, self.opts))
+        result = asyncio.run(mgr.recognize(self.image, self.opts))
         assert result.backend == "openai"
         assert primary.call_count == 0
         assert secondary.call_count == 1
@@ -244,9 +234,7 @@ class TestEngineManagerCircuitBreaker:
     def test_no_engines_raises(self) -> None:
         mgr = EngineManager()
         try:
-            asyncio.get_event_loop().run_until_complete(
-                mgr.recognize(self.image, self.opts)
-            )
+            asyncio.run(mgr.recognize(self.image, self.opts))
             assert False, "Expected OcrError"
         except OcrError as e:
             assert "No OCR engines registered" in str(e)

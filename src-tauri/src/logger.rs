@@ -335,11 +335,12 @@ mod tests {
 
         for i in 0..10 {
             let msg = format!("buffered message {}", i);
+            let args = format_args!("{}", msg);
             let record = log::RecordBuilder::new()
                 .level(Level::Info)
                 .target("test")
                 .module_path(Some("logger::tests"))
-                .args(format_args!("{}", msg))
+                .args(args)
                 .build();
             logger.log(&record);
         }
