@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "pytest-asyncio>=0.21", "httpx", "pytest-timeout>=2.0", "pytest-cov>=4.0", "ruff>=0.4"]
+dev = ["pytest>=7.0", "pytest-asyncio>=0.21", "httpx", "pytest-cov>=4.0", "ruff>=0.4"]
 pix2text = ["pix2text>=1.1", "onnxruntime>=1.16"]
 claude = ["anthropic>=0.40"]
 openai = ["openai>=1.0"]
@@ -29,7 +29,7 @@ packages = ["sidecar"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--timeout=30 --cov"
+addopts = "--cov"
 asyncio_mode = "auto"
 
 [tool.ruff]
