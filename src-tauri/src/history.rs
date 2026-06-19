@@ -48,7 +48,7 @@ pub fn list(
          FROM history ORDER BY created_at DESC LIMIT ?1 OFFSET ?2",
     )?;
     let entries = stmt
-        .query_map((limit, offset), |row| row_to_entry(row))?
+        .query_map((limit, offset), row_to_entry)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(entries)
 }
@@ -58,7 +58,7 @@ pub fn get_by_id(conn: &Connection, id: i64) -> Result<Option<HistoryEntry>, rus
         "SELECT id, created_at, latex, backend, confidence, screenshot_path, mathml \
          FROM history WHERE id = ?1",
     )?;
-    let mut entries = stmt.query_map([id], |row| row_to_entry(row))?;
+    let mut entries = stmt.query_map([id], row_to_entry)?;
     match entries.next() {
         Some(entry) => Ok(Some(entry?)),
         None => Ok(None),
@@ -85,7 +85,7 @@ pub fn search(conn: &Connection, query: &str) -> Result<Vec<HistoryEntry>, rusql
          ORDER BY h.created_at DESC",
     )?;
     let entries = stmt
-        .query_map([&escaped_query as &str], |row| row_to_entry(row))?
+        .query_map([&escaped_query as &str], row_to_entry)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(entries)
 }

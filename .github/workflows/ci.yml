@@ -49,6 +49,7 @@ jobs:
       - run: pip install -e "./sidecar[dev,pix2text,claude,openai,genai]"
         timeout-minutes: 15
       - run: pytest
+        timeout-minutes: 10
       - name: Ruff
         run: ruff check sidecar/
 

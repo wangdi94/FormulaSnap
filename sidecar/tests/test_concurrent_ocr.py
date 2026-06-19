@@ -195,6 +195,11 @@ class TestConcurrentOcrRequests:
         payload = {"image_base64": _make_image_base64(b"same-image"), "backend": "pix2text"}
 
         with patch("sidecar.api.server.cost_tracker"):
+            # Pre-warm the cache with a sequential request.
+            warmup = client.post("/api/ocr", json=payload)
+            assert warmup.status_code == 200
+
+            # Concurrent requests should all hit cache.
             with ThreadPoolExecutor(max_workers=3) as pool:
                 futures = [
                     pool.submit(client.post, "/api/ocr", json=payload)

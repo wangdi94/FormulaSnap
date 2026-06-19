@@ -15,6 +15,7 @@ Covers:
 """
 
 import stat
+import sys
 import time
 from unittest.mock import MagicMock
 
@@ -415,6 +416,10 @@ class TestEncryptedFileBackendPersistence:
         backend.set_key("openai", "api_key", "sk-new-value")
         assert backend.get_key("openai", "api_key") == "sk-new-value"
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="Unix file permissions not enforced on NTFS",
+    )
     def test_encrypted_file_permissions(self, tmp_path):
         """Encrypted keys file should have 0o600 permissions (owner rw only)."""
         master_key = _Fernet.generate_key()
