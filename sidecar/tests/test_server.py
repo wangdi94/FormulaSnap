@@ -47,11 +47,16 @@ def test_health_endpoint(client):
 
 
 def test_shutdown_endpoint(client):
-    with patch("sidecar.api.server.signal.raise_signal"):
+    with patch("sidecar.api.server.signal.raise_signal"), patch(
+        "sidecar.api.server.threading"
+    ) as mock_threading:
+        mock_timer = MagicMock()
+        mock_threading.Timer.return_value = mock_timer
         response = client.post("/shutdown", json={"token": _SHUTDOWN_TOKEN})
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "shutting_down"
+        mock_timer.start.assert_called_once()
 
 
 def test_shutdown_graceful(client):
@@ -59,10 +64,15 @@ def test_shutdown_graceful(client):
 
     from sidecar.api.server import lifespan
 
-    with patch("sidecar.api.server.signal.raise_signal"):
+    with patch("sidecar.api.server.signal.raise_signal"), patch(
+        "sidecar.api.server.threading"
+    ) as mock_threading:
+        mock_timer = MagicMock()
+        mock_threading.Timer.return_value = mock_timer
         response = client.post("/shutdown", json={"token": _SHUTDOWN_TOKEN})
         assert response.status_code == 200
         assert response.json() == {"status": "shutting_down"}
+        mock_timer.start.assert_called_once()
 
     mock_engine = MagicMock()
     mock_engine.aclose = AsyncMock()
@@ -92,19 +102,29 @@ def test_shutdown_wrong_token(client):
 
 
 def test_shutdown_correct_token(client):
-    with patch("sidecar.api.server.signal.raise_signal"):
+    with patch("sidecar.api.server.signal.raise_signal"), patch(
+        "sidecar.api.server.threading"
+    ) as mock_threading:
+        mock_timer = MagicMock()
+        mock_threading.Timer.return_value = mock_timer
         response = client.post("/shutdown", json={"token": _SHUTDOWN_TOKEN})
         assert response.status_code == 200
         assert response.json()["status"] == "shutting_down"
+        mock_timer.start.assert_called_once()
 
 
 def test_shutdown_token_from_header(client):
-    with patch("sidecar.api.server.signal.raise_signal"):
+    with patch("sidecar.api.server.signal.raise_signal"), patch(
+        "sidecar.api.server.threading"
+    ) as mock_threading:
+        mock_timer = MagicMock()
+        mock_threading.Timer.return_value = mock_timer
         response = client.post(
             "/shutdown", headers={"X-Shutdown-Token": _SHUTDOWN_TOKEN}
         )
         assert response.status_code == 200
         assert response.json()["status"] == "shutting_down"
+        mock_timer.start.assert_called_once()
 
 
 def test_shutdown_token_from_env():
