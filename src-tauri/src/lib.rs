@@ -66,8 +66,14 @@ fn open_selection_window(app: tauri::AppHandle) -> Result<(), String> {
     .decorations(false)
     .fullscreen(true)
     .always_on_top(true)
+    .visible(false)
     .build()
     .map_err(|e| e.to_string())?;
+
+    // 等待 WebView2 初始化完成后再显示，避免白屏竞态
+    std::thread::sleep(std::time::Duration::from_millis(200));
+
+    sel_win.show().map_err(|e| e.to_string())?;
     sel_win.set_focus().map_err(|e| e.to_string())?;
 
     Ok(())
