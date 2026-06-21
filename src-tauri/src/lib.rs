@@ -48,6 +48,9 @@ fn open_selection_window(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::WebviewWindowBuilder;
 
     if let Some(existing) = app.get_webview_window("selection") {
+        if let Err(e) = existing.eval("window.location.reload()") {
+            log::warn!("刷新选择窗口失败: {}", e);
+        }
         if let Err(e) = existing.show() {
             log::warn!("显示选择窗口失败: {}", e);
         }
