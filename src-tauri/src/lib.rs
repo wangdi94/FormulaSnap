@@ -43,17 +43,24 @@ fn capture_screen_for_selection() -> Result<String, String> {
 }
 
 /// 打开透明全屏区域选择窗口。
+///
+/// 流程：先截图 → 再创建窗口 → 发送预截图数据 → 显示窗口。
+/// 避免 WebView2 初始化竞态导致白屏。
 #[tauri::command]
 fn open_selection_window(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::WebviewWindowBuilder;
 
     log::info!("open_selection_window 被调用");
 
+    log::info!("开始截图...");
+    let screenshot = capture_screen_base64()?;
+    log::info!("截图完成，数据长度: {}", screenshot.len());
+
     if let Some(existing) = app.get_webview_window("selection") {
         log::info!("复用已有选择窗口");
-        if let Err(e) = existing.eval("window.location.reload()") {
-            log::warn!("刷新选择窗口失败: {}", e);
-        }
+        existing
+            .emit("pre-capture", &screenshot)
+            .map_err(|e| e.to_string())?;
         if let Err(e) = existing.show() {
             log::warn!("显示选择窗口失败: {}", e);
         }
@@ -64,6 +71,15 @@ fn open_selection_window(app: tauri::AppHandle) -> Result<(), String> {
     }
 
     log::info!("创建新的选择窗口");
+
+    let (width, height) = match app.primary_monitor() {
+        Ok(Some(monitor)) => {
+            let size = monitor.size();
+            (size.width, size.height)
+        }
+        _ => (1920u32, 1080u32),
+    };
+
     let sel_win = WebviewWindowBuilder::new(
         &app,
         "selection",
@@ -71,15 +87,19 @@ fn open_selection_window(app: tauri::AppHandle) -> Result<(), String> {
     )
     .title("选择区域")
     .decorations(false)
-    .fullscreen(true)
+    .inner_size(width as f64, height as f64)
     .always_on_top(true)
     .visible(false)
     .build()
     .map_err(|e| e.to_string())?;
 
     log::info!("选择窗口已创建，等待 WebView2 初始化...");
-    // 等待 WebView2 初始化完成后再显示，避免白屏竞态
     std::thread::sleep(std::time::Duration::from_millis(200));
+
+    sel_win
+        .emit("pre-capture", &screenshot)
+        .map_err(|e| e.to_string())?;
+    log::info!("已发送预截图数据");
 
     sel_win.show().map_err(|e| e.to_string())?;
     log::info!("选择窗口已显示");
