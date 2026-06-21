@@ -1,0 +1,11 @@
+/home/wangdi/FormulaSnap/sidecar-rust/target/debug/deps/arrayvec-9c7d2e33599034e0.d: /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/lib.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/arrayvec_impl.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/arrayvec.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/array_string.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/char.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/errors.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/utils.rs
+
+/home/wangdi/FormulaSnap/sidecar-rust/target/debug/deps/libarrayvec-9c7d2e33599034e0.rmeta: /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/lib.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/arrayvec_impl.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/arrayvec.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/array_string.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/char.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/errors.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/utils.rs
+
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/lib.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/arrayvec_impl.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/arrayvec.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/array_string.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/char.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/errors.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arrayvec-0.7.7/src/utils.rs:

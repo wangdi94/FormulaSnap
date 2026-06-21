@@ -1,0 +1,12 @@
+/home/wangdi/FormulaSnap/sidecar-rust/target/debug/deps/equator-64d55dad82fc6561.d: /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/lib.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/decompose.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/spec.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/spec/by_val.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/spec/debug.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/spec/sized.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/structures.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/traits.rs
+
+/home/wangdi/FormulaSnap/sidecar-rust/target/debug/deps/libequator-64d55dad82fc6561.rmeta: /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/lib.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/decompose.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/spec.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/spec/by_val.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/spec/debug.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/spec/sized.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/structures.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/traits.rs
+
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/lib.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/decompose.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/spec.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/spec/by_val.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/spec/debug.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/spec/sized.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/structures.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/equator-0.4.2/src/traits.rs:

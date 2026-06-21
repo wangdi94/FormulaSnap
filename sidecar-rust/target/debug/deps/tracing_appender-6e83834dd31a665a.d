@@ -1,0 +1,10 @@
+/home/wangdi/FormulaSnap/sidecar-rust/target/debug/deps/tracing_appender-6e83834dd31a665a.d: /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/lib.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/non_blocking.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/rolling.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/rolling/builder.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/worker.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/sync.rs
+
+/home/wangdi/FormulaSnap/sidecar-rust/target/debug/deps/libtracing_appender-6e83834dd31a665a.rmeta: /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/lib.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/non_blocking.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/rolling.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/rolling/builder.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/worker.rs /home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/sync.rs
+
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/lib.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/non_blocking.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/rolling.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/rolling/builder.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/worker.rs:
+/home/wangdi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-appender-0.2.5/src/sync.rs:
