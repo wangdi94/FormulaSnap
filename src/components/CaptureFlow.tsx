@@ -5,6 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { callOcr, type OcrResponse, SidecarError, checkSidecarHealth } from "../lib/sidecarClient";
 import { useSettings } from "../contexts/SettingsContext";
 import { t } from "../lib/i18n";
+import { TIMEOUT } from "../lib/constants";
 import { Spinner } from "./Spinner";
 import CapturePreview from "./capture/CapturePreview";
 import OcrResultDisplay from "./capture/OcrResultDisplay";
@@ -18,7 +19,7 @@ interface FlowError {
   retryable: boolean;
 }
 
-const SELECTING_TIMEOUT_MS = 15_000;
+
 
 export function extractSidecarError(detail: unknown): { errorType: string | undefined; message: string } {
   if (detail == null || typeof detail !== 'object') {
@@ -147,7 +148,7 @@ export default function CaptureFlow() {
           const base64 = await Promise.race([
             invoke<string>("capture_region_base64", { x, y, width, height }),
             new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("截图命令超时")), 15000),
+              setTimeout(() => reject(new Error("截图命令超时")), TIMEOUT.SCREENSHOT_CAPTURE),
             ),
           ]);
           setImageBase64(base64);
@@ -211,7 +212,7 @@ export default function CaptureFlow() {
     const timer = setTimeout(() => {
       setState("idle");
       setError({ message: t('capture.selection_timeout'), code: "SELECTION_TIMEOUT", retryable: false });
-    }, SELECTING_TIMEOUT_MS);
+    }, TIMEOUT.SELECTION);
     return () => clearTimeout(timer);
   }, [state]);
 

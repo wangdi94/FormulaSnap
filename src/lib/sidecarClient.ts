@@ -7,6 +7,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { t } from './i18n';
+import { TIMEOUT } from './constants';
 import type { OcrBackend, OcrResponse } from '../types/ocr';
 export type { OcrBackend, OcrRequest, OcrResponse } from '../types/ocr';
 
@@ -134,7 +135,7 @@ export async function callOcr(
   options?: { signal?: AbortSignal },
 ): Promise<OcrResponse> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT.OCR);
 
   const externalSignal = options?.signal;
   const onExternalAbort = () => controller.abort();
@@ -162,7 +163,7 @@ export async function callOcr(
  */
 export async function getStats(): Promise<StatsResponse | null> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT.SIDECAR_STATS);
 
   try {
     return await request<StatsResponse>('/api/stats', {
@@ -200,7 +201,7 @@ export async function getApiKeys(): Promise<KeysResponse> {
  *
  * 用于检测 sidecar 是否就绪，超时返回 false
  */
-export async function checkSidecarHealth(timeoutMs: number = 3000): Promise<boolean> {
+export async function checkSidecarHealth(timeoutMs: number = TIMEOUT.SIDECAR_HEALTH): Promise<boolean> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
