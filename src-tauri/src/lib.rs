@@ -8,6 +8,7 @@ mod sidecar;
 mod tray;
 
 use std::sync::Mutex;
+use tauri::Emitter;
 use tauri::Manager;
 use tauri::WindowEvent;
 
