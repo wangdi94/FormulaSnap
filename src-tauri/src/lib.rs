@@ -47,7 +47,10 @@ fn capture_screen_for_selection() -> Result<String, String> {
 fn open_selection_window(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::WebviewWindowBuilder;
 
+    log::info!("open_selection_window 被调用");
+
     if let Some(existing) = app.get_webview_window("selection") {
+        log::info!("复用已有选择窗口");
         if let Err(e) = existing.eval("window.location.reload()") {
             log::warn!("刷新选择窗口失败: {}", e);
         }
@@ -60,6 +63,7 @@ fn open_selection_window(app: tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
+    log::info!("创建新的选择窗口");
     let sel_win = WebviewWindowBuilder::new(
         &app,
         "selection",
@@ -73,11 +77,14 @@ fn open_selection_window(app: tauri::AppHandle) -> Result<(), String> {
     .build()
     .map_err(|e| e.to_string())?;
 
+    log::info!("选择窗口已创建，等待 WebView2 初始化...");
     // 等待 WebView2 初始化完成后再显示，避免白屏竞态
     std::thread::sleep(std::time::Duration::from_millis(200));
 
     sel_win.show().map_err(|e| e.to_string())?;
+    log::info!("选择窗口已显示");
     sel_win.set_focus().map_err(|e| e.to_string())?;
+    log::info!("选择窗口已聚焦");
 
     Ok(())
 }
