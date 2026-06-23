@@ -29,7 +29,7 @@ packages = ["sidecar"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov"
+addopts = "--cov=sidecar --cov-report=term --cov-report=html"
 asyncio_mode = "auto"
 
 [tool.ruff]

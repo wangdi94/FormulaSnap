@@ -1,5 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+
+vi.mock('../lib/i18n', () => ({
+  t: (key: string) => {
+    const translations: Record<string, string> = {
+      'error.title': '错误',
+      'error.page_crashed': '页面崩溃了',
+      'error.description': '抱歉，发生了意外错误。您可以尝试刷新页面或点击下方按钮重试。',
+      'error.refresh': '刷新页面',
+      'error.details': '错误详情',
+      'common.retry': '重试',
+    };
+    return translations[key] || key;
+  },
+}));
+
 import ErrorBoundary from '../components/ErrorBoundary';
 
 // Component that throws on render

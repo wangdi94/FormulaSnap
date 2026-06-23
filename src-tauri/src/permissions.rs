@@ -122,3 +122,82 @@ pub fn recheck_accessibility(app: AppHandle) -> AccessibilityPermissionStatus {
     let _ = app.emit("accessibility-permission-status", status.clone());
     status
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_check_accessibility_returns_true_on_non_macos() {
+        // On non-macOS platforms, check_accessibility() always returns true.
+        // On macOS, it depends on actual system permission — we only assert
+        // the non-macOS guarantee here.
+        #[cfg(not(target_os = "macos"))]
+        {
+            assert!(check_accessibility());
+        }
+    }
+
+    #[test]
+    fn test_accessibility_permission_status_struct_fields() {
+        let status = AccessibilityPermissionStatus {
+            granted: true,
+            platform: "linux".to_string(),
+        };
+        assert!(status.granted);
+        assert_eq!(status.platform, "linux");
+
+        let status_false = AccessibilityPermissionStatus {
+            granted: false,
+            platform: "macos".to_string(),
+        };
+        assert!(!status_false.granted);
+        assert_eq!(status_false.platform, "macos");
+    }
+
+    #[test]
+    fn test_accessibility_permission_status_is_serializable() {
+        let status = AccessibilityPermissionStatus {
+            granted: true,
+            platform: "test".to_string(),
+        };
+        // AccessibilityPermissionStatus derives Serialize — verify it compiles
+        // and serializes without panicking.
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("granted"));
+        assert!(json.contains("platform"));
+    }
+
+    #[test]
+    fn test_get_accessibility_permission_function_signature() {
+        // Verify the function exists with the expected signature at compile time.
+        let _f: fn() -> AccessibilityPermissionStatus = get_accessibility_permission;
+    }
+
+    #[test]
+    fn test_get_accessibility_permission_returns_correct_platform() {
+        let status = get_accessibility_permission();
+        #[cfg(target_os = "macos")]
+        assert_eq!(status.platform, "macos");
+        #[cfg(not(target_os = "macos"))]
+        assert_eq!(status.platform, std::env::consts::OS);
+    }
+
+    #[test]
+    fn test_open_accessibility_settings_cmd_function_signature() {
+        // Verify the function exists with the expected signature at compile time.
+        let _f: fn() = open_accessibility_settings_cmd;
+    }
+
+    #[test]
+    fn test_open_accessibility_settings_function_signature() {
+        let _f: fn() = open_accessibility_settings;
+    }
+
+    #[test]
+    fn test_recheck_accessibility_function_signature() {
+        // Verify the function exists with the expected signature at compile time.
+        // recheck_accessibility takes AppHandle and returns AccessibilityPermissionStatus.
+        let _f: fn(AppHandle) -> AccessibilityPermissionStatus = recheck_accessibility;
+    }
+}

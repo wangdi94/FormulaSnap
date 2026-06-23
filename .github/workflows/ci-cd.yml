@@ -1,0 +1,651 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  # ==================== PATH FILTER ====================
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+      rust: ${{ steps.filter.outputs.rust }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'src/**'
+              - 'src/i18n/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+            backend:
+              - 'sidecar/**'
+              - 'pyproject.toml'
+            rust:
+              - 'src-tauri/**'
+              - 'Cargo.toml'
+            workflows:
+              - '.github/workflows/**'
+
+  # ==================== CI JOBS ====================
+  frontend:
+    needs: [changes]
+    if: ${{ needs.changes.outputs.frontend == 'true' || needs.changes.outputs.workflows == 'true' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        node-version: [22, 20]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: '11.4.0'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+      - name: TypeScript type check
+        run: npx tsc --noEmit --skipLibCheck
+      - name: Run tests with coverage
+        run: |
+          MAX_RETRIES=2
+          RETRY_DELAY=5
+          for ((i=1; i<=MAX_RETRIES; i++)); do
+            echo "Test attempt $i of $MAX_RETRIES..."
+            if pnpm run test -- --coverage; then
+              echo "✅ Tests passed on attempt $i"
+              break
+            fi
+            echo "::error::Tests failed on attempt $i"
+            if [ "$i" -eq "$MAX_RETRIES" ]; then
+              echo "::error::All test attempts failed"
+              exit 1
+            fi
+            echo "Retrying in ${RETRY_DELAY}s..."
+            sleep "$RETRY_DELAY"
+          done
+      - name: Coverage Summary
+        run: |
+          echo "::group::Coverage Summary"
+          if [ -f coverage/lcov.info ]; then
+            TOTAL_LINES=$(grep -E "^LF:" coverage/lcov.info | awk -F: '{sum+=$2} END {print sum}')
+            COVERED_LINES=$(grep -E "^LH:" coverage/lcov.info | awk -F: '{sum+=$2} END {print sum}')
+            if [ -n "$TOTAL_LINES" ] && [ "$TOTAL_LINES" -gt 0 ] 2>/dev/null; then
+              COVERAGE=$(echo "scale=1; $COVERED_LINES * 100 / $TOTAL_LINES" | bc)
+              echo "Coverage: ${COVERAGE}% (${COVERED_LINES} lines covered out of ${TOTAL_LINES})"
+            else
+              echo "Could not parse coverage data from lcov.info"
+            fi
+          else
+            echo "Coverage report not found at coverage/lcov.info"
+          fi
+          echo "::endgroup::"
+      - name: ESLint
+        run: pnpm run lint
+
+  backend:
+    needs: [changes]
+    if: ${{ needs.changes.outputs.backend == 'true' || needs.changes.outputs.workflows == 'true' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.10', '3.11']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('sidecar/pyproject.toml') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+      - name: Install sidecar dependencies
+        run: pip install -e "./sidecar[dev,pix2text,claude,openai,genai]"
+        timeout-minutes: 15
+      - name: Run pytest with retry
+        run: |
+          MAX_RETRIES=2
+          RETRY_DELAY=5
+          for ((i=1; i<=MAX_RETRIES; i++)); do
+            echo "Test attempt $i of $MAX_RETRIES..."
+            if pytest; then
+              echo "✅ Tests passed on attempt $i"
+              break
+            fi
+            echo "::error::Tests failed on attempt $i"
+            if [ "$i" -eq "$MAX_RETRIES" ]; then
+              echo "::error::All test attempts failed"
+              exit 1
+            fi
+            echo "Retrying in ${RETRY_DELAY}s..."
+            sleep "$RETRY_DELAY"
+          done
+        timeout-minutes: 10
+      - name: Coverage Summary
+        run: |
+          echo "::group::Coverage Summary"
+          if [ -f .coverage ]; then
+            coverage json --data-file=.coverage 2>/dev/null
+            if [ -f coverage.json ]; then
+              TOTAL=$(python3 -c "import json; d=json.load(open('coverage.json')); print(f\"{d['totals']['percent_covered']:.1f}\")" 2>/dev/null)
+              COVERED=$(python3 -c "import json; d=json.load(open('coverage.json')); print(int(d['totals']['covered_lines']))" 2>/dev/null)
+              MISSING=$(python3 -c "import json; d=json.load(open('coverage.json')); print(int(d['totals']['missing_lines']))" 2>/dev/null)
+              if [ -n "$TOTAL" ]; then
+                echo "Coverage: ${TOTAL}% (${COVERED} lines covered out of $((COVERED + MISSING)))"
+              else
+                echo "Could not parse coverage JSON"
+              fi
+              rm -f coverage.json
+            else
+              echo "Could not generate coverage JSON report"
+            fi
+          else
+            echo "Coverage data not found (.coverage file missing)"
+          fi
+          echo "::endgroup::"
+      - name: Ruff lint check
+        run: |
+          if ! ruff check sidecar/; then
+            echo "::error::Ruff lint check failed"
+            exit 1
+          fi
+
+  rust:
+    needs: [changes]
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf libgtk-3-dev libayatana-appindicator3-dev libpipewire-0.3-dev libdbus-1-dev libgbm-dev
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Create dummy sidecar binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p src-tauri/binaries
+          touch src-tauri/binaries/formulasnap-sidecar-aarch64-apple-darwin
+          touch src-tauri/binaries/formulasnap-sidecar-x86_64-unknown-linux-gnu
+          touch src-tauri/binaries/formulasnap-sidecar-x86_64-apple-darwin
+      - name: Create dummy sidecar binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p src-tauri/binaries
+          touch src-tauri/binaries/formulasnap-sidecar-x86_64-pc-windows-msvc.exe
+      - name: Format check
+        run: |
+          if ! cargo fmt --check; then
+            echo "::error::Rust format check failed"
+            exit 1
+          fi
+        working-directory: src-tauri
+      - name: Run tests with retry
+        run: |
+          MAX_RETRIES=2
+          RETRY_DELAY=5
+          for ((i=1; i<=MAX_RETRIES; i++)); do
+            echo "Test attempt $i of $MAX_RETRIES..."
+            if cargo test --lib; then
+              echo "✅ Tests passed on attempt $i"
+              break
+            fi
+            echo "::error::Tests failed on attempt $i"
+            if [ "$i" -eq "$MAX_RETRIES" ]; then
+              echo "::error::All test attempts failed"
+              exit 1
+            fi
+            echo "Retrying in ${RETRY_DELAY}s..."
+            sleep "$RETRY_DELAY"
+          done
+        working-directory: src-tauri
+      - name: Run tests with coverage
+        run: cargo install cargo-tarpaulin && cargo tarpaulin --skip-clean --out Text --output-dir coverage
+        working-directory: src-tauri
+      - name: Coverage Summary
+        run: |
+          echo "::group::Coverage Summary"
+          cargo tarpaulin --skip-clean --out Json --output-dir coverage 2>/dev/null
+          if [ -f coverage/tarpaulin-report.json ]; then
+            TOTAL=$(python3 -c "import json; d=json.load(open('coverage/tarpaulin-report.json')); print(f\"{d.get('coverage', 0):.1f}\")" 2>/dev/null)
+            if [ -n "$TOTAL" ] && [ "$TOTAL" != "0.0" ]; then
+              echo "Coverage: ${TOTAL}%"
+            else
+              echo "Could not parse tarpaulin coverage JSON"
+            fi
+          else
+            echo "Could not generate tarpaulin coverage JSON report"
+          fi
+          echo "::endgroup::"
+        working-directory: src-tauri
+      - name: Clippy lint check
+        run: |
+          if ! cargo clippy -- -D warnings; then
+            echo "::error::Clippy lint check failed"
+            exit 1
+          fi
+        working-directory: src-tauri
+
+  workflow-lint:
+    needs: [changes]
+    if: ${{ needs.changes.outputs.workflows == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint workflow files
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:${{ github.workspace }}" \
+            -w "${{ github.workspace }}" \
+            rhysd/actionlint:latest -color
+      - name: Verify gh CLI availability
+        run: |
+          echo "::group::Verify gh CLI"
+          gh --version
+          echo "::endgroup::"
+
+  # ==================== BUILD VERIFICATION (CI) ====================
+  build-verification:
+    needs: [changes]
+    if: ${{ needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            rust_target: x86_64-apple-darwin
+          - os: macos-latest
+            rust_target: aarch64-apple-darwin
+          - os: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+          - os: ubuntu-latest
+            rust_target: x86_64-unknown-linux-gnu
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf libgtk-3-dev libayatana-appindicator3-dev libpipewire-0.3-dev libdbus-1-dev libgbm-dev
+
+      # ---- Python sidecar (PyInstaller) ----
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install sidecar dependencies
+        run: pip install "./sidecar[pix2text,claude,openai,genai]" pyinstaller appdirs
+
+      - name: Build sidecar (Unix)
+        if: runner.os != 'Windows'
+        working-directory: sidecar
+        run: |
+          if ! ./build.sh; then
+            echo "::error::Sidecar build failed (Unix)"
+            exit 1
+          fi
+
+      - name: Build sidecar (Windows)
+        if: runner.os == 'Windows'
+        working-directory: sidecar
+        shell: cmd
+        run: |
+          .\build.bat || (echo "::error::Sidecar build failed (Windows)" && exit 1)
+
+      # ---- Frontend ----
+      - uses: pnpm/action-setup@v2
+        with:
+          version: '11.4.0'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install
+      - name: Build frontend
+        run: |
+          if ! pnpm run build; then
+            echo "::error::Frontend build failed"
+            exit 1
+          fi
+
+      # ---- Rust / Tauri build verification ----
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Tauri build verification
+        run: |
+          if ! pnpm tauri build --target ${{ matrix.rust_target }}; then
+            echo "::error::Tauri build failed for target ${{ matrix.rust_target }}"
+            exit 1
+          fi
+
+  # ==================== RELEASE (CD) ====================
+  release:
+    needs: [frontend, backend, rust, workflow-lint]
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            rust_target: x86_64-apple-darwin
+          - os: macos-latest
+            rust_target: aarch64-apple-darwin
+          - os: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- Python sidecar (PyInstaller) ----
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('sidecar/pyproject.toml') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+
+      - name: Install sidecar dependencies
+        run: pip install "./sidecar[pix2text,claude,openai,genai]" pyinstaller appdirs
+
+      - name: Build sidecar (Unix)
+        if: runner.os != 'Windows'
+        working-directory: sidecar
+        run: |
+          if ! ./build.sh; then
+            echo "::error::Sidecar build failed (Unix) in release"
+            exit 1
+          fi
+
+      - name: Build sidecar (Windows)
+        if: runner.os == 'Windows'
+        working-directory: sidecar
+        shell: cmd
+        run: |
+          .\build.bat || (echo "::error::Sidecar build failed (Windows) in release" && exit 1)
+
+      # ---- Frontend ----
+      - uses: pnpm/action-setup@v2
+        with:
+          version: '11.4.0'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install
+      - name: Build frontend
+        run: |
+          if ! pnpm run build; then
+            echo "::error::Frontend build failed in release"
+            exit 1
+          fi
+
+      # ---- Rust / Tauri ----
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Build Tauri application
+        run: |
+          if ! pnpm tauri build --target ${{ matrix.rust_target }}; then
+            echo "::error::Tauri build failed for target ${{ matrix.rust_target }} in release"
+            exit 1
+          fi
+
+      # ---- Build artifact size verification ----
+      - name: Verify build artifact sizes
+        shell: bash
+        run: |
+          echo "========================================="
+          echo "  Build Artifact Size Verification"
+          echo "========================================="
+
+          # Thresholds (in MB)
+          EXE_LIMIT=250
+          DMG_LIMIT=220
+
+          FAILED=false
+
+          # --- Sidecar binary ---
+          echo ""
+          echo "--- Sidecar Binary ---"
+          while IFS= read -r f; do
+            SIZE=$(du -h "$f" | cut -f1)
+            echo "  $f: $SIZE"
+          done < <(find src-tauri/binaries -name "formulasnap-sidecar-*" -type f 2>/dev/null)
+
+          # --- Installer packages ---
+          echo ""
+          echo "--- Installer Packages ---"
+
+          # Check .exe (NSIS installer)
+          while IFS= read -r f; do
+            SIZE_MB=$(du -m "$f" | cut -f1)
+            echo "  $f: ${SIZE_MB}MB"
+            if [ "$SIZE_MB" -ge "$EXE_LIMIT" ]; then
+              echo "  ❌ FAIL: exceeds ${EXE_LIMIT}MB limit"
+              FAILED=true
+            fi
+          done < <(find src-tauri/target/*/release/bundle -name "*.exe" -type f 2>/dev/null)
+
+          # Check .dmg
+          while IFS= read -r f; do
+            SIZE_MB=$(du -m "$f" | cut -f1)
+            echo "  $f: ${SIZE_MB}MB"
+            if [ "$SIZE_MB" -ge "$DMG_LIMIT" ]; then
+              echo "  ❌ FAIL: exceeds ${DMG_LIMIT}MB limit"
+              FAILED=true
+            fi
+          done < <(find src-tauri/target/*/release/bundle -name "*.dmg" -type f 2>/dev/null)
+
+          # Report .msi (informational)
+          while IFS= read -r f; do
+            SIZE_MB=$(du -m "$f" | cut -f1)
+            echo "  $f: ${SIZE_MB}MB"
+          done < <(find src-tauri/target/*/release/bundle -name "*.msi" -type f 2>/dev/null)
+
+          echo ""
+          if [ "$FAILED" = true ]; then
+            echo "❌ Build artifact size verification FAILED"
+            exit 1
+          fi
+          echo "✅ All build artifact sizes within limits"
+
+      # ---- Upload to GitHub Release ----
+      - name: Upload artifacts to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "::group::Configure GitHub Release"
+          TAG="${{ github.ref_name }}"
+
+          # Check if release already exists (race-safe)
+          if gh release view "$TAG" --json name --jq .name > /dev/null 2>&1; then
+            echo "Release $TAG already exists — will upload artifacts"
+          else
+            echo "Creating draft release: $TAG"
+            NOTES_FILE=$(mktemp)
+            {
+              echo "## FormulaSnap $TAG"
+              echo ""
+              echo "### Download"
+              echo ""
+              echo "| Platform | Architecture | File |"
+              echo "|----------|-------------|------|"
+              echo "| macOS | Intel (x86_64) | \`.dmg\` |"
+              echo "| macOS | Apple Silicon (aarch64) | \`.dmg\` |"
+              echo "| Windows | x86_64 | \`.msi\` / \`.exe\` |"
+              echo ""
+              echo "> Auto-update is enabled. Future releases will be delivered in-app."
+            } > "$NOTES_FILE"
+            gh release create "$TAG" --draft --title "FormulaSnap $TAG" --notes-file "$NOTES_FILE"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Find build artifacts"
+          ARTIFACTS=()
+          while IFS= read -r f; do
+            ARTIFACTS+=("$f")
+            echo "Found: $f ($(du -h "$f" | cut -f1))"
+          done < <(find src-tauri/target/*/release/bundle -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \) 2>/dev/null)
+
+          while IFS= read -r f; do
+            ARTIFACTS+=("$f")
+            echo "Found: $f ($(du -h "$f" | cut -f1))"
+          done < <(find src-tauri/binaries -name "formulasnap-sidecar-*" -type f 2>/dev/null)
+
+          if [ ${#ARTIFACTS[@]} -eq 0 ]; then
+            echo "::warning::No artifacts found to upload"
+            echo "::endgroup::"
+            exit 1
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Upload artifacts to GitHub Release"
+          MAX_RETRIES=3
+          RETRY_DELAY=10
+          UPLOAD_OK=false
+
+          for ((i=1; i<=MAX_RETRIES; i++)); do
+            echo "Upload attempt $i of $MAX_RETRIES..."
+            if gh release upload "$TAG" --clobber "${ARTIFACTS[@]}"; then
+              UPLOAD_OK=true
+              break
+            fi
+            echo "Upload attempt $i failed"
+            if [ "$i" -lt "$MAX_RETRIES" ]; then
+              echo "Retrying in ${RETRY_DELAY}s..."
+              sleep "$RETRY_DELAY"
+            fi
+          done
+
+          if [ "$UPLOAD_OK" = false ]; then
+            echo "::error::Failed to upload artifacts after $MAX_RETRIES attempts"
+            exit 1
+          fi
+          echo "✅ All artifacts uploaded successfully"
+          echo "::endgroup::"
+
+  # ==================== FAILURE NOTIFICATION ====================
+  notify-failure:
+    if: failure()
+    needs: [frontend, backend, rust, build-verification, release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create failure issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const jobs = await github.rest.actions.listWorkflowRunJobs({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId
+            });
+            
+            const failedJobs = jobs.data.jobs.filter(job => job.conclusion === 'failure');
+            const jobSummary = failedJobs.map(job => `- **${job.name}**: [View logs](${job.html_url})`).join('\n');
+            
+            const issueTitle = `CI/CD Failure: ${context.workflow} #${context.runNumber}`;
+            const issueBody = `## Workflow Failure Report
+            
+            **Workflow:** ${context.workflow}
+            **Run:** #${context.runNumber}
+            **Branch:** ${context.ref}
+            **Commit:** ${context.sha}
+            **Actor:** ${context.actor}
+            
+            ### Failed Jobs
+            ${jobSummary || 'No specific failed jobs identified'}
+            
+            ### Workflow Run
+            [View full run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+            
+            ---
+            *This issue was created automatically by the CI/CD failure notification system.*`;
+            
+            // Check if an issue already exists for this run
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'ci-failure',
+              per_page: 10
+            });
+            
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const duplicate = existingIssues.data.find(issue => issue.body.includes(runUrl));
+            
+            if (!duplicate) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: issueBody,
+                labels: ['ci-failure', 'automated']
+              });
+              console.log('Created failure notification issue');
+            } else {
+              console.log('Failure issue already exists for this run');
+            }

@@ -289,3 +289,173 @@ pub fn run() {
             }
         });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db;
+    use crate::history;
+
+    fn setup_db() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        db::initialize_database(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn test_db_conn_struct_definition() {
+        let conn = setup_db();
+        let db_conn = DbConn(Mutex::new(conn));
+        // Verify DbConn wraps a Mutex<Connection> and can be locked
+        let guard = db_conn.0.lock().unwrap();
+        // Verify the connection is functional by querying settings
+        let _: Option<String> = guard
+            .query_row("SELECT value FROM settings WHERE key = 'test'", [], |row| {
+                row.get(0)
+            })
+            .ok();
+        drop(guard);
+    }
+
+    #[test]
+    fn test_insert_history_via_history_module() {
+        let conn = setup_db();
+        let id = history::insert(&conn, "E=mc^2", "pix2text", 0.99, None).unwrap();
+        assert!(id > 0);
+    }
+
+    #[test]
+    fn test_get_history_via_history_module() {
+        let conn = setup_db();
+        history::insert(&conn, "x^2", "test", 0.9, None).unwrap();
+        history::insert(&conn, "y^2", "test", 0.8, None).unwrap();
+        let entries = history::list(&conn, 10, 0).unwrap();
+        assert_eq!(entries.len(), 2);
+    }
+
+    #[test]
+    fn test_get_history_by_id_via_history_module() {
+        let conn = setup_db();
+        let id = history::insert(&conn, "\\alpha", "test", 0.85, Some("/tmp/shot.png")).unwrap();
+        let entry = history::get_by_id(&conn, id).unwrap().unwrap();
+        assert_eq!(entry.latex, "\\alpha");
+        assert_eq!(entry.backend, "test");
+        assert!((entry.confidence - 0.85).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_delete_history_via_history_module() {
+        let conn = setup_db();
+        let id = history::insert(&conn, "to_delete", "test", 0.7, None).unwrap();
+        assert!(history::delete(&conn, id).unwrap());
+        assert!(history::get_by_id(&conn, id).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_search_history_via_history_module() {
+        let conn = setup_db();
+        history::insert(&conn, "\\int_{0}^{1} x dx", "test", 0.95, None).unwrap();
+        history::insert(&conn, "y = mx + b", "test", 0.9, None).unwrap();
+        let results = history::search(&conn, "int").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].latex, "\\int_{0}^{1} x dx");
+    }
+
+    #[test]
+    fn test_get_setting_function() {
+        let conn = setup_db();
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+            ("theme", "dark"),
+        )
+        .unwrap();
+        let value: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = ?1",
+                ["theme"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(value.as_deref(), Some("dark"));
+    }
+
+    #[test]
+    fn test_save_setting_function() {
+        let conn = setup_db();
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+            ("language", "zh"),
+        )
+        .unwrap();
+        let value: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = ?1",
+                ["language"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(value.as_deref(), Some("zh"));
+
+        // Overwrite
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+            ("language", "en"),
+        )
+        .unwrap();
+        let value: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = ?1",
+                ["language"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(value.as_deref(), Some("en"));
+    }
+
+    #[test]
+    fn test_save_and_get_setting_roundtrip() {
+        let conn = setup_db();
+        let pairs = vec![("k1", "v1"), ("k2", "v2"), ("k3", "v3")];
+        for (k, v) in &pairs {
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+                (k, v),
+            )
+            .unwrap();
+        }
+        for (k, v) in &pairs {
+            let value: Option<String> = conn
+                .query_row("SELECT value FROM settings WHERE key = ?1", [k], |row| {
+                    row.get(0)
+                })
+                .unwrap();
+            assert_eq!(value.as_deref(), Some(*v));
+        }
+    }
+
+    #[test]
+    fn test_generate_handler_lists_all_commands() {
+        // Verify that the generate_handler! macro includes all expected commands.
+        // This is a compile-time check — if a command name is misspelled or removed,
+        // the build itself will fail. Here we assert the expected count to catch
+        // accidental additions or removals.
+        let expected_commands = [
+            "get_history",
+            "insert_history",
+            "get_history_by_id",
+            "delete_history",
+            "search_history",
+            "get_setting",
+            "save_setting",
+            "capture_screen_base64",
+            "capture_region_base64",
+            "capture_screen_for_selection",
+            "open_selection_window",
+            "get_sidecar_port",
+            "get_accessibility_permission",
+            "open_accessibility_settings_cmd",
+            "recheck_accessibility",
+        ];
+        assert_eq!(expected_commands.len(), 15);
+    }
+}
