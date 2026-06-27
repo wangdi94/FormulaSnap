@@ -151,7 +151,7 @@ class TestOcrBackendProtocol:
         import sys
         from typing import get_type_hints
 
-        if sys.version_info >= (3, 11):
+        if sys.version_info >= (3, 12):
             members = OcrBackend.__protocol_attrs__
             assert "recognize" in members
             assert "estimate_cost" in members
