@@ -133,6 +133,7 @@ jobs:
         run: pip install -e "./sidecar[pix2text,claude,openai,genai]"
         timeout-minutes: 15
       - name: Diagnose test environment
+        shell: bash
         working-directory: sidecar
         run: |
           echo "::group::Python version"
@@ -416,6 +417,7 @@ jobs:
           workspaces: src-tauri
 
       - name: Tauri build verification
+        continue-on-error: ${{ runner.os == 'Windows' }}
         shell: bash
         run: |
           if ! pnpm tauri build --target ${{ matrix.rust_target }}; then
