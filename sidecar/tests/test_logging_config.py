@@ -46,12 +46,14 @@ class TestGetAppDataDir:
 
     def test_windows_path_fallback(self):
         """Windows without APPDATA: uses ~/AppData/Roaming/formulasnap."""
+        fake_home = Path("C:\\Users\\testuser")
         with (
             patch("sidecar.logging_config.platform.system", return_value="Windows"),
             patch.dict(os.environ, {}, clear=True),
+            patch.object(Path, "home", return_value=fake_home),
         ):
             result = _get_app_data_dir()
-        expected = Path.home() / "AppData" / "Roaming" / "formulasnap"
+        expected = fake_home / "AppData" / "Roaming" / "formulasnap"
         assert result == expected
 
     def test_linux_path(self):
