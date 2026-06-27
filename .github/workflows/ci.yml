@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  issues: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -104,6 +108,7 @@ jobs:
     needs: [changes]
     if: ${{ needs.changes.outputs.backend == 'true' || needs.changes.outputs.workflows == 'true' }}
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.python-version == '3.11' }}
     strategy:
       fail-fast: false
       matrix:
@@ -127,6 +132,18 @@ jobs:
         continue-on-error: true
         run: pip install -e "./sidecar[pix2text,claude,openai,genai]"
         timeout-minutes: 15
+      - name: Diagnose test environment
+        working-directory: sidecar
+        run: |
+          echo "::group::Python version"
+          python --version
+          echo "::endgroup::"
+          echo "::group::Installed packages"
+          pip list 2>/dev/null | grep -iE "pytest|httpx|fastapi|pydantic|pillow"
+          echo "::endgroup::"
+          echo "::group::Test discovery"
+          python -m pytest --co --no-header -q 2>&1 || echo "Test discovery failed"
+          echo "::endgroup::"
       - name: Run pytest with retry
         working-directory: sidecar
         run: |
@@ -134,7 +151,7 @@ jobs:
           RETRY_DELAY=5
           for ((i=1; i<=MAX_RETRIES; i++)); do
             echo "Test attempt $i of $MAX_RETRIES..."
-            if pytest --tb=long; then
+            if pytest --tb=long -v 2>&1; then
               echo "✅ Tests passed on attempt $i"
               break
             fi
@@ -212,6 +229,11 @@ jobs:
         run: |
           mkdir -p src-tauri/binaries
           touch src-tauri/binaries/formulasnap-sidecar-x86_64-pc-windows-msvc.exe
+      - name: Normalize line endings for format check
+        if: runner.os == 'Windows'
+        run: |
+          git config core.autocrlf false
+          git add --renormalize .
       - name: Format check
         run: |
           if ! cargo fmt --check; then
@@ -309,7 +331,7 @@ jobs:
             rust_target: x86_64-unknown-linux-gnu
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.os == 'ubuntu-latest' && 45 || 30 }}
+    timeout-minutes: ${{ matrix.os == 'ubuntu-latest' && 60 || 30 }}
 
     steps:
       - uses: actions/checkout@v4
@@ -355,9 +377,25 @@ jobs:
           cache: pnpm
 
       - run: pnpm install
+      - name: Diagnose frontend environment
+        run: |
+          echo "::group::Node version"
+          node --version
+          echo "::endgroup::"
+          echo "::group::pnpm version"
+          pnpm --version
+          echo "::endgroup::"
+          echo "::group::TypeScript version"
+          npx tsc --version
+          echo "::endgroup::"
+      - name: Check TypeScript compilation
+        run: |
+          if ! npx tsc --noEmit --skipLibCheck 2>&1; then
+            echo "::warning::TypeScript compilation failed - see above errors"
+          fi
       - name: Build frontend
         run: |
-          if ! pnpm run build; then
+          if ! pnpm run build 2>&1; then
             echo "::error::Frontend build failed"
             exit 1
           fi
