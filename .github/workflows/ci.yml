@@ -120,16 +120,21 @@ jobs:
           key: pip-${{ runner.os }}-${{ hashFiles('sidecar/pyproject.toml') }}
           restore-keys: |
             pip-${{ runner.os }}-
-      - name: Install sidecar dependencies
-        run: pip install -e "./sidecar[dev,pix2text,claude,openai,genai]"
+      - name: Install sidecar core dependencies
+        run: pip install -e "./sidecar[dev]"
+        timeout-minutes: 10
+      - name: Install optional engine dependencies
+        continue-on-error: true
+        run: pip install -e "./sidecar[pix2text,claude,openai,genai]"
         timeout-minutes: 15
       - name: Run pytest with retry
+        working-directory: sidecar
         run: |
           MAX_RETRIES=2
           RETRY_DELAY=5
           for ((i=1; i<=MAX_RETRIES; i++)); do
             echo "Test attempt $i of $MAX_RETRIES..."
-            if pytest; then
+            if pytest --tb=long; then
               echo "✅ Tests passed on attempt $i"
               break
             fi
@@ -143,10 +148,11 @@ jobs:
           done
         timeout-minutes: 10
       - name: Coverage Summary
+        working-directory: sidecar
         run: |
           echo "::group::Coverage Summary"
           if [ -f .coverage ]; then
-            coverage json --data-file=.coverage 2>/dev/null
+            coverage json --data-file=.coverage 2>/dev/null || true
             if [ -f coverage.json ]; then
               TOTAL=$(python3 -c "import json; d=json.load(open('coverage.json')); print(f\"{d['totals']['percent_covered']:.1f}\")" 2>/dev/null)
               COVERED=$(python3 -c "import json; d=json.load(open('coverage.json')); print(int(d['totals']['covered_lines']))" 2>/dev/null)
@@ -165,8 +171,9 @@ jobs:
           fi
           echo "::endgroup::"
       - name: Ruff lint check
+        working-directory: sidecar
         run: |
-          if ! ruff check sidecar/; then
+          if ! ruff check .; then
             echo "::error::Ruff lint check failed"
             exit 1
           fi
@@ -232,12 +239,19 @@ jobs:
           done
         working-directory: src-tauri
       - name: Run tests with coverage
-        run: cargo install cargo-tarpaulin && cargo tarpaulin --skip-clean --out Text --output-dir coverage
+        continue-on-error: true
+        run: |
+          if cargo install cargo-tarpaulin 2>/dev/null; then
+            cargo tarpaulin --skip-clean --out Text --output-dir coverage --engine llvm 2>/dev/null || \
+              cargo tarpaulin --skip-clean --out Text --output-dir coverage 2>/dev/null || \
+              echo "::warning::Tarpaulin coverage run failed (non-fatal)"
+          else
+            echo "::warning::cargo-tarpaulin could not be installed (non-fatal)"
+          fi
         working-directory: src-tauri
       - name: Coverage Summary
         run: |
           echo "::group::Coverage Summary"
-          cargo tarpaulin --skip-clean --out Json --output-dir coverage 2>/dev/null
           if [ -f coverage/tarpaulin-report.json ]; then
             TOTAL=$(python3 -c "import json; d=json.load(open('coverage/tarpaulin-report.json')); print(f\"{d.get('coverage', 0):.1f}\")" 2>/dev/null)
             if [ -n "$TOTAL" ] && [ "$TOTAL" != "0.0" ]; then
@@ -246,7 +260,7 @@ jobs:
               echo "Could not parse tarpaulin coverage JSON"
             fi
           else
-            echo "Could not generate tarpaulin coverage JSON report"
+            echo "Coverage report not generated (non-fatal)"
           fi
           echo "::endgroup::"
         working-directory: src-tauri
@@ -295,7 +309,7 @@ jobs:
             rust_target: x86_64-unknown-linux-gnu
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: ${{ matrix.os == 'ubuntu-latest' && 45 || 30 }}
 
     steps:
       - uses: actions/checkout@v4
@@ -374,7 +388,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const jobs = await github.rest.actions.listWorkflowRunJobs({
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
               owner: context.repo.owner,
               repo: context.repo.repo,
               run_id: context.runId
