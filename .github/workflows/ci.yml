@@ -1,15 +1,14 @@
-name: CI/CD
+name: CI
 
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
     branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  cancel-in-progress: true
 
 jobs:
   # ==================== PATH FILTER ====================
@@ -278,7 +277,7 @@ jobs:
           gh --version
           echo "::endgroup::"
 
-  # ==================== BUILD VERIFICATION (CI) ====================
+  # ==================== BUILD VERIFICATION ====================
   build-verification:
     needs: [changes]
     if: ${{ needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
@@ -365,233 +364,10 @@ jobs:
             exit 1
           fi
 
-  # ==================== RELEASE (CD) ====================
-  release:
-    needs: [frontend, backend, rust, workflow-lint]
-    if: startsWith(github.ref, 'refs/tags/')
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-15-intel
-            rust_target: x86_64-apple-darwin
-          - os: macos-latest
-            rust_target: aarch64-apple-darwin
-          - os: windows-latest
-            rust_target: x86_64-pc-windows-msvc
-
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-
-    steps:
-      - uses: actions/checkout@v4
-
-      # ---- Python sidecar (PyInstaller) ----
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('sidecar/pyproject.toml') }}
-          restore-keys: |
-            pip-${{ runner.os }}-
-
-      - name: Install sidecar dependencies
-        run: pip install "./sidecar[pix2text,claude,openai,genai]" pyinstaller appdirs
-
-      - name: Build sidecar (Unix)
-        if: runner.os != 'Windows'
-        working-directory: sidecar
-        run: |
-          if ! ./build.sh; then
-            echo "::error::Sidecar build failed (Unix) in release"
-            exit 1
-          fi
-
-      - name: Build sidecar (Windows)
-        if: runner.os == 'Windows'
-        working-directory: sidecar
-        shell: cmd
-        run: |
-          .\build.bat || (echo "::error::Sidecar build failed (Windows) in release" && exit 1)
-
-      # ---- Frontend ----
-      - uses: pnpm/action-setup@v2
-        with:
-          version: '11.4.0'
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - run: pnpm install
-      - name: Build frontend
-        run: |
-          if ! pnpm run build; then
-            echo "::error::Frontend build failed in release"
-            exit 1
-          fi
-
-      # ---- Rust / Tauri ----
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_target }}
-
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-
-      - name: Build Tauri application
-        run: |
-          if ! pnpm tauri build --target ${{ matrix.rust_target }}; then
-            echo "::error::Tauri build failed for target ${{ matrix.rust_target }} in release"
-            exit 1
-          fi
-
-      # ---- Build artifact size verification ----
-      - name: Verify build artifact sizes
-        shell: bash
-        run: |
-          echo "========================================="
-          echo "  Build Artifact Size Verification"
-          echo "========================================="
-
-          # Thresholds (in MB)
-          EXE_LIMIT=250
-          DMG_LIMIT=220
-
-          FAILED=false
-
-          # --- Sidecar binary ---
-          echo ""
-          echo "--- Sidecar Binary ---"
-          while IFS= read -r f; do
-            SIZE=$(du -h "$f" | cut -f1)
-            echo "  $f: $SIZE"
-          done < <(find src-tauri/binaries -name "formulasnap-sidecar-*" -type f 2>/dev/null)
-
-          # --- Installer packages ---
-          echo ""
-          echo "--- Installer Packages ---"
-
-          # Check .exe (NSIS installer)
-          while IFS= read -r f; do
-            SIZE_MB=$(du -m "$f" | cut -f1)
-            echo "  $f: ${SIZE_MB}MB"
-            if [ "$SIZE_MB" -ge "$EXE_LIMIT" ]; then
-              echo "  ❌ FAIL: exceeds ${EXE_LIMIT}MB limit"
-              FAILED=true
-            fi
-          done < <(find src-tauri/target/*/release/bundle -name "*.exe" -type f 2>/dev/null)
-
-          # Check .dmg
-          while IFS= read -r f; do
-            SIZE_MB=$(du -m "$f" | cut -f1)
-            echo "  $f: ${SIZE_MB}MB"
-            if [ "$SIZE_MB" -ge "$DMG_LIMIT" ]; then
-              echo "  ❌ FAIL: exceeds ${DMG_LIMIT}MB limit"
-              FAILED=true
-            fi
-          done < <(find src-tauri/target/*/release/bundle -name "*.dmg" -type f 2>/dev/null)
-
-          # Report .msi (informational)
-          while IFS= read -r f; do
-            SIZE_MB=$(du -m "$f" | cut -f1)
-            echo "  $f: ${SIZE_MB}MB"
-          done < <(find src-tauri/target/*/release/bundle -name "*.msi" -type f 2>/dev/null)
-
-          echo ""
-          if [ "$FAILED" = true ]; then
-            echo "❌ Build artifact size verification FAILED"
-            exit 1
-          fi
-          echo "✅ All build artifact sizes within limits"
-
-      # ---- Upload to GitHub Release ----
-      - name: Upload artifacts to GitHub Release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "::group::Configure GitHub Release"
-          TAG="${{ github.ref_name }}"
-
-          # Check if release already exists (race-safe)
-          if gh release view "$TAG" --json name --jq .name > /dev/null 2>&1; then
-            echo "Release $TAG already exists — will upload artifacts"
-          else
-            echo "Creating draft release: $TAG"
-            NOTES_FILE=$(mktemp)
-            {
-              echo "## FormulaSnap $TAG"
-              echo ""
-              echo "### Download"
-              echo ""
-              echo "| Platform | Architecture | File |"
-              echo "|----------|-------------|------|"
-              echo "| macOS | Intel (x86_64) | \`.dmg\` |"
-              echo "| macOS | Apple Silicon (aarch64) | \`.dmg\` |"
-              echo "| Windows | x86_64 | \`.msi\` / \`.exe\` |"
-              echo ""
-              echo "> Auto-update is enabled. Future releases will be delivered in-app."
-            } > "$NOTES_FILE"
-            gh release create "$TAG" --draft --title "FormulaSnap $TAG" --notes-file "$NOTES_FILE"
-          fi
-          echo "::endgroup::"
-
-          echo "::group::Find build artifacts"
-          ARTIFACTS=()
-          while IFS= read -r f; do
-            ARTIFACTS+=("$f")
-            echo "Found: $f ($(du -h "$f" | cut -f1))"
-          done < <(find src-tauri/target/*/release/bundle -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \) 2>/dev/null)
-
-          while IFS= read -r f; do
-            ARTIFACTS+=("$f")
-            echo "Found: $f ($(du -h "$f" | cut -f1))"
-          done < <(find src-tauri/binaries -name "formulasnap-sidecar-*" -type f 2>/dev/null)
-
-          if [ ${#ARTIFACTS[@]} -eq 0 ]; then
-            echo "::warning::No artifacts found to upload"
-            echo "::endgroup::"
-            exit 1
-          fi
-          echo "::endgroup::"
-
-          echo "::group::Upload artifacts to GitHub Release"
-          MAX_RETRIES=3
-          RETRY_DELAY=10
-          UPLOAD_OK=false
-
-          for ((i=1; i<=MAX_RETRIES; i++)); do
-            echo "Upload attempt $i of $MAX_RETRIES..."
-            if gh release upload "$TAG" --clobber "${ARTIFACTS[@]}"; then
-              UPLOAD_OK=true
-              break
-            fi
-            echo "Upload attempt $i failed"
-            if [ "$i" -lt "$MAX_RETRIES" ]; then
-              echo "Retrying in ${RETRY_DELAY}s..."
-              sleep "$RETRY_DELAY"
-            fi
-          done
-
-          if [ "$UPLOAD_OK" = false ]; then
-            echo "::error::Failed to upload artifacts after $MAX_RETRIES attempts"
-            exit 1
-          fi
-          echo "✅ All artifacts uploaded successfully"
-          echo "::endgroup::"
-
   # ==================== FAILURE NOTIFICATION ====================
   notify-failure:
     if: failure()
-    needs: [frontend, backend, rust, build-verification, release]
+    needs: [frontend, backend, rust, workflow-lint, build-verification]
     runs-on: ubuntu-latest
     steps:
       - name: Create failure issue
@@ -607,7 +383,7 @@ jobs:
             const failedJobs = jobs.data.jobs.filter(job => job.conclusion === 'failure');
             const jobSummary = failedJobs.map(job => `- **${job.name}**: [View logs](${job.html_url})`).join('\n');
             
-            const issueTitle = `CI/CD Failure: ${context.workflow} #${context.runNumber}`;
+            const issueTitle = `CI Failure: ${context.workflow} #${context.runNumber}`;
             const issueBody = `## Workflow Failure Report
             
             **Workflow:** ${context.workflow}
@@ -623,7 +399,7 @@ jobs:
             [View full run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
             
             ---
-            *This issue was created automatically by the CI/CD failure notification system.*`;
+            *This issue was created automatically by the CI failure notification system.*`;
             
             // Check if an issue already exists for this run
             const existingIssues = await github.rest.issues.listForRepo({
