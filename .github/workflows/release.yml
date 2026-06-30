@@ -6,6 +6,8 @@ on:
 
 permissions:
   contents: write
+  issues: write
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -73,6 +75,7 @@ jobs:
 
       - run: pnpm install
       - name: Build frontend
+        shell: bash
         run: |
           if ! pnpm run build; then
             echo "::error::Frontend build failed in release"
@@ -89,6 +92,7 @@ jobs:
           workspaces: src-tauri
 
       - name: Build Tauri application
+        shell: bash
         run: |
           if ! pnpm tauri build --target ${{ matrix.rust_target }}; then
             echo "::error::Tauri build failed for target ${{ matrix.rust_target }} in release"
