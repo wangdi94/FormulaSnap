@@ -14,7 +14,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ==================== CI STATUS GATE ====================
+  check-ci-status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ci_passed: ${{ steps.check.outputs.ci_passed }}
+    steps:
+      - name: Check CI status for this commit
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA="${{ github.sha }}"
+          echo "Checking CI status for commit $SHA"
+
+          CI_RUN=$(gh api "/repos/${{ github.repository }}/actions/runs?name=CI&head_sha=$SHA&per_page=1" \
+            --jq '.workflow_runs[0].conclusion // "not_found"' 2>/dev/null)
+
+          echo "CI conclusion: $CI_RUN"
+
+          if [ "$CI_RUN" = "success" ]; then
+            echo "✅ CI passed for this commit. Proceeding with release."
+            echo "ci_passed=true" >> "$GITHUB_OUTPUT"
+          elif [ "$CI_RUN" = "failure" ] || [ "$CI_RUN" = "cancelled" ]; then
+            echo "::error::CI workflow failed for commit $SHA. Release blocked."
+            echo "ci_passed=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          else
+            echo "::warning::CI status is '$CI_RUN' (not blocking, but verify manually)"
+            echo "ci_passed=unknown" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
+    needs: [check-ci-status]
     strategy:
       fail-fast: false
       matrix:
@@ -94,10 +127,22 @@ jobs:
       - name: Build Tauri application
         shell: bash
         run: |
-          if ! pnpm tauri build --target ${{ matrix.rust_target }}; then
-            echo "::error::Tauri build failed for target ${{ matrix.rust_target }} in release"
-            exit 1
-          fi
+          MAX_RETRIES=2
+          RETRY_DELAY=15
+          for ((i=1; i<=MAX_RETRIES; i++)); do
+            echo "Build attempt $i of $MAX_RETRIES..."
+            if pnpm tauri build --target ${{ matrix.rust_target }}; then
+              echo "✅ Tauri build succeeded on attempt $i"
+              break
+            fi
+            echo "::warning::Tauri build failed on attempt $i"
+            if [ "$i" -eq "$MAX_RETRIES" ]; then
+              echo "::error::Tauri build failed for target ${{ matrix.rust_target }} after $MAX_RETRIES attempts"
+              exit 1
+            fi
+            echo "Retrying in ${RETRY_DELAY}s..."
+            sleep "$RETRY_DELAY"
+          done
 
       # ---- Build artifact size verification ----
       - name: Verify build artifact sizes

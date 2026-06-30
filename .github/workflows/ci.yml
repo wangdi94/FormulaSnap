@@ -420,10 +420,22 @@ jobs:
         continue-on-error: ${{ runner.os == 'Windows' }}
         shell: bash
         run: |
-          if ! pnpm tauri build --target ${{ matrix.rust_target }}; then
-            echo "::error::Tauri build failed for target ${{ matrix.rust_target }}"
-            exit 1
-          fi
+          MAX_RETRIES=2
+          RETRY_DELAY=15
+          for ((i=1; i<=MAX_RETRIES; i++)); do
+            echo "Build attempt $i of $MAX_RETRIES..."
+            if pnpm tauri build --target ${{ matrix.rust_target }}; then
+              echo "✅ Tauri build succeeded on attempt $i"
+              break
+            fi
+            echo "::warning::Tauri build failed on attempt $i"
+            if [ "$i" -eq "$MAX_RETRIES" ]; then
+              echo "::error::Tauri build failed for target ${{ matrix.rust_target }} after $MAX_RETRIES attempts"
+              exit 1
+            fi
+            echo "Retrying in ${RETRY_DELAY}s..."
+            sleep "$RETRY_DELAY"
+          done
 
   # ==================== FAILURE NOTIFICATION ====================
   notify-failure:
